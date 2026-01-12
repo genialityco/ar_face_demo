@@ -1,0 +1,1 @@
+// Pixelation effect

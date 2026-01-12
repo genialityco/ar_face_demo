@@ -1,0 +1,1 @@
+// Web camera capture management

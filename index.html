@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Filter GPGPU</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #0a0a0a;
+        color: white;
+        font-family: system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #app {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #container {
+        position: relative;
+      }
+      video {
+        display: none;
+      }
+      canvas {
+        max-width: 100%;
+        max-height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="container"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
