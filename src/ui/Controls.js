@@ -24,7 +24,10 @@ export class Controls {
       { value: 'vendetta', label: 'Máscara Vendetta' },
       { value: 'viking', label: 'Casco Vikingo' },
       { value: 'flower', label: 'Cara de Flores' },
-      { value: 'holoscan', label: 'Escaneo Holográfico' }
+      { value: 'holoscan', label: 'Escaneo Holográfico' },
+      { value: 'eyeglow', label: 'Fuego y Brillo en los Ojos' },
+      //{ value: 'facewarp', label: 'Cara Inflada' },
+      { value: 'hamburger', label: 'Comilona de Hamburguesas' }
     ];
 
     for (const opt of options) {

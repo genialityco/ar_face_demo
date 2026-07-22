@@ -6,6 +6,7 @@ import { Engine } from './core/Engine.js';
 import { FaceTracker } from './core/FaceTracker.js';
 import { HandTracker } from './core/HandTracker.js';
 import { Controls } from './ui/Controls.js';
+import { MessageOverlay } from './ui/MessageOverlay.js';
 
 class App {
   constructor() {
@@ -14,6 +15,7 @@ class App {
     this.faceTracker = null;
     this.handTracker = null;
     this.controls = null;
+    this.messageOverlay = null;
     this.frameCount = 0;
   }
 
@@ -44,6 +46,7 @@ class App {
       this.controls = new Controls({
         onFilterChange: (filter) => this.handleFilterChange(filter)
       });
+      this.messageOverlay = new MessageOverlay();
 
       // 6. Iniciar loop principal (cambiado a loop personalizado)
       console.log('Starting render loop...');
@@ -67,6 +70,12 @@ class App {
       this.handTracker.detect(video, timestamp);
     }
 
+    // Mostrar mensaje flotante pendiente (ej. "¡Bajaste de peso!")
+    const pendingMessage = this.engine.consumePendingMessage();
+    if (pendingMessage) {
+      this.messageOverlay.show(pendingMessage);
+    }
+
     // Actualizar objeto según posición del rostro (cada frame)
     const nose = this.faceTracker.getNose();
     this.engine.updateFacePosition(nose);
@@ -75,8 +84,11 @@ class App {
     const faceMatrix = this.faceTracker.getTransformMatrix();
     this.engine.updateFaceTransform(faceMatrix);
 
-    // Actualizar los landmarks del rostro (para el escaneo holográfico)
-    this.engine.updateFaceLandmarks(this.faceTracker.getLandmarks());
+    // Actualizar los landmarks del rostro (para el escaneo holográfico y el fuego/destellos en los ojos)
+    const landmarks = this.faceTracker.getLandmarks();
+    const blendshapes = this.faceTracker.getBlendshapes();
+    this.engine.updateFaceLandmarks(landmarks);
+    this.engine.updateFaceExpression(landmarks, blendshapes);
 
     // Actualizar posición de las manos (cada frame)
     const leftPalm = this.handTracker.getLeftPalm();
@@ -84,9 +96,28 @@ class App {
     this.engine.updateLeftHandPosition(leftPalm);
     this.engine.updateRightHandPosition(rightPalm);
 
+    const leftPinching = this.handTracker.isLeftPinching();
+    const rightPinching = this.handTracker.isRightPinching();
+
     // Interacción de agarrar/soltar el accesorio facial con un gesto de pinza
-    this.engine.updateHandGrab('Left', leftPalm, this.handTracker.isLeftPinching(), nose);
-    this.engine.updateHandGrab('Right', rightPalm, this.handTracker.isRightPinching(), nose);
+    this.engine.updateHandGrab('Left', leftPalm, leftPinching, nose);
+    this.engine.updateHandGrab('Right', rightPalm, rightPinching, nose);
+
+    // Hamburguesas agarrables (pinza con toda la mano) que van aumentando la deformación de la cara al comerlas
+    const hands = {
+      Left: {
+        palm: leftPalm,
+        landmarks: this.handTracker.getLeftLandmarks(),
+        isPincerGrab: this.handTracker.isLeftPincerGrab()
+      },
+      Right: {
+        palm: rightPalm,
+        landmarks: this.handTracker.getRightLandmarks(),
+        isPincerGrab: this.handTracker.isRightPincerGrab()
+      }
+    };
+    this.engine.updateHamburgerFeast(landmarks, blendshapes, hands);
+    this.engine.updateFaceWarp(landmarks);
 
     // Actualizar y renderizar el engine
     this.engine.update();

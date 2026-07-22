@@ -6,6 +6,12 @@ import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 // Distancia (en coordenadas normalizadas) entre pulgar e índice para considerar un gesto de pinza
 const PINCH_THRESHOLD = 0.06;
 
+// Distancia (en coordenadas normalizadas) entre el pulgar y las puntas de los demás dedos
+// para considerar una "pinza" con toda la mano (como agarrar algo entre las puntas)
+const PINCER_THRESHOLD = 0.1;
+// Cuántas puntas (de índice/medio/anular/meñique) deben estar cerca del pulgar
+const PINCER_FINGERS_REQUIRED = 2;
+
 export class HandTracker {
   constructor() {
     this.handLandmarker = null;
@@ -109,6 +115,30 @@ export class HandTracker {
   }
 
   /**
+   * Obtiene los landmarks (21 puntos) de la mano izquierda
+   */
+  getLeftLandmarks() {
+    for (let i = 0; i < this.getHandCount(); i++) {
+      if (this.getHandedness(i) === 'Left') {
+        return this.getLandmarks(i);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Obtiene los landmarks (21 puntos) de la mano derecha
+   */
+  getRightLandmarks() {
+    for (let i = 0; i < this.getHandCount(); i++) {
+      if (this.getHandedness(i) === 'Right') {
+        return this.getLandmarks(i);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Obtiene el centro de la palma de la mano izquierda
    */
   getLeftPalm() {
@@ -168,6 +198,54 @@ export class HandTracker {
     for (let i = 0; i < this.getHandCount(); i++) {
       if (this.getHandedness(i) === 'Right') {
         return this.isPinching(i);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Indica si la mano está haciendo una "pinza" con toda la mano: los dedos se
+   * extienden y las puntas se juntan contra el pulgar (como agarrar algo entre
+   * las puntas de los dedos). A diferencia de isPinching (solo pulgar+índice),
+   * requiere que además otra punta (medio/anular/meñique) esté cerca del pulgar.
+   * @param {number} handIndex Índice de la mano
+   */
+  isPincerGrab(handIndex = 0) {
+    const landmarks = this.getLandmarks(handIndex);
+    if (!landmarks) return false;
+
+    const thumbTip = landmarks[4];
+    const tips = [8, 12, 16, 20]; // puntas de índice, medio, anular, meñique
+
+    let closeCount = 0;
+    for (const i of tips) {
+      const tip = landmarks[i];
+      const d = Math.hypot(tip.x - thumbTip.x, tip.y - thumbTip.y, tip.z - thumbTip.z);
+      if (d < PINCER_THRESHOLD) closeCount++;
+    }
+
+    return closeCount >= PINCER_FINGERS_REQUIRED;
+  }
+
+  /**
+   * Indica si la mano izquierda está haciendo el gesto de pinza con toda la mano
+   */
+  isLeftPincerGrab() {
+    for (let i = 0; i < this.getHandCount(); i++) {
+      if (this.getHandedness(i) === 'Left') {
+        return this.isPincerGrab(i);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Indica si la mano derecha está haciendo el gesto de pinza con toda la mano
+   */
+  isRightPincerGrab() {
+    for (let i = 0; i < this.getHandCount(); i++) {
+      if (this.getHandedness(i) === 'Right') {
+        return this.isPincerGrab(i);
       }
     }
     return false;

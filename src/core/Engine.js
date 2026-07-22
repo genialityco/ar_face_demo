@@ -10,6 +10,9 @@ import { VikingHelmet } from '../effects/face/VikingHelmet.js';
 import { HeadOccluder } from '../effects/face/HeadOccluder.js';
 import { FlowerFace } from '../effects/face/FlowerFace.js';
 import { HoloScan } from '../effects/face/HoloScan.js';
+import { EyeGlow } from '../effects/face/EyeGlow.js';
+import { FaceWarp } from '../effects/face/FaceWarp.js';
+import { HamburgerFeast } from '../effects/face/HamburgerFeast.js';
 
 // FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
 const FACE_MATRIX_FOV = 63;
@@ -19,6 +22,9 @@ const HAND_HOLD_DEPTH = 30;
 
 // Distancia normalizada (0-1, espacio de imagen) entre mano y rostro para permitir "sacarse" el accesorio
 const GRAB_PROXIMITY_THRESHOLD = 0.35;
+
+// Cuánto se infla la cara (bulgeAmount de FaceWarp) cuando se comieron todas las hamburguesas
+const HAMBURGER_MAX_BULGE = 0.14;
 
 export class Engine {
   constructor(container) {
@@ -49,7 +55,7 @@ export class Engine {
     // Efecto de metaballs
     this.metaballEffect = null;
 
-    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan')
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger')
     this.currentFilter = 'metaball';
 
     // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
@@ -62,6 +68,15 @@ export class Engine {
 
     // Efecto de escaneo holográfico (usa landmarks 2D, se renderiza en la escena principal)
     this.holoScan = null;
+
+    // Fuego/destellos en los ojos según expresión (usa landmarks 2D + blendshapes)
+    this.eyeGlow = null;
+
+    // Deformación del rostro en el video en vivo (reemplaza el fondo mientras está activo)
+    this.faceWarp = null;
+
+    // Hamburguesas agarrables que aumentan progresivamente el FaceWarp al comerlas
+    this.hamburgerFeast = null;
 
     // Estado de "puesto" / "sujeto con la mano" para los accesorios que se pueden agarrar
     this.wearState = {
@@ -138,6 +153,18 @@ export class Engine {
     // Configurar el efecto de escaneo holográfico
     this.holoScan = new HoloScan();
     this.holoScan.addToScene(this.scene);
+
+    // Configurar el efecto de fuego/destellos en los ojos
+    this.eyeGlow = new EyeGlow();
+    this.eyeGlow.addToScene(this.scene);
+
+    // Configurar el efecto de deformación del rostro
+    this.faceWarp = new FaceWarp();
+    this.faceWarp.setBackgroundTexture(this.videoTexture);
+
+    // Configurar las hamburguesas agarrables
+    this.hamburgerFeast = new HamburgerFeast();
+    this.hamburgerFeast.addToScene(this.scene);
 
     // Configurar el post-procesado
     this.setupPostProcessing();
@@ -236,7 +263,7 @@ export class Engine {
 
   /**
    * Cambia el filtro activo
-   * @param {'metaball'|'vendetta'|'viking'|'flower'|'holoscan'} filter
+   * @param {'metaball'|'vendetta'|'viking'|'flower'|'holoscan'|'eyeglow'|'facewarp'|'hamburger'} filter
    */
   async setFilter(filter) {
     if (filter === this.currentFilter) return;
@@ -253,6 +280,8 @@ export class Engine {
       await this.vikingHelmet.load(this.cubeRenderTarget.texture);
     } else if (filter === 'flower') {
       await this.flowerFace.load();
+    } else if (filter === 'hamburger') {
+      await this.hamburgerFeast.load();
     }
 
     this.currentFilter = filter;
@@ -260,8 +289,16 @@ export class Engine {
     this.vikingHelmet.setVisible(filter === 'viking');
     this.flowerFace.setVisible(filter === 'flower');
     this.holoScan.setVisible(filter === 'holoscan');
+    this.eyeGlow.setVisible(filter === 'eyeglow');
+    this.hamburgerFeast.setVisible(filter === 'hamburger');
     const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower';
     this.headOccluder.setVisible(isFaceAsset);
+
+    if (filter === 'hamburger') {
+      // Siempre empieza sin ningún efecto aplicado
+      this.hamburgerFeast.reset();
+      this.faceWarp.bulgeAmount = 0;
+    }
   }
 
   /**
@@ -497,6 +534,54 @@ export class Engine {
   }
 
   /**
+   * Actualiza el efecto de fuego/destellos en los ojos según la expresión facial
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   * @param {Object|null} blendshapes
+   */
+  updateFaceExpression(landmarks, blendshapes) {
+    if (this.currentFilter !== 'eyeglow' || !this.eyeGlow) return;
+    this.eyeGlow.update(landmarks, blendshapes, (x, y, z) => this.projectToWorld(x, y, z), this.camera);
+  }
+
+  /**
+   * Actualiza la deformación del rostro en el video en vivo
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   */
+  updateFaceWarp(landmarks) {
+    if ((this.currentFilter !== 'facewarp' && this.currentFilter !== 'hamburger') || !this.faceWarp) return;
+    this.faceWarp.update(landmarks);
+  }
+
+  /**
+   * Actualiza las hamburguesas agarrables y, según cuántas se hayan comido,
+   * aumenta progresivamente el bulgeAmount de FaceWarp
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   * @param {Object|null} blendshapes
+   * @param {{Left:{palm:Object|null,landmarks:Array|null,isPincerGrab:boolean}, Right:{palm:Object|null,landmarks:Array|null,isPincerGrab:boolean}}} hands
+   */
+  updateHamburgerFeast(landmarks, blendshapes, hands) {
+    if (this.currentFilter !== 'hamburger' || !this.hamburgerFeast) return;
+
+    this.hamburgerFeast.update({
+      landmarks,
+      blendshapes,
+      hands,
+      projectFn: (x, y, z) => this.projectToWorld(x, y, z),
+      time: performance.now() * 0.001
+    });
+
+    this.faceWarp.bulgeAmount = this.hamburgerFeast.getProgress() * HAMBURGER_MAX_BULGE;
+  }
+
+  /**
+   * Devuelve y limpia el mensaje flotante pendiente (ej. "¡Bajaste de peso!"), o null
+   */
+  consumePendingMessage() {
+    if (this.currentFilter !== 'hamburger' || !this.hamburgerFeast) return null;
+    return this.hamburgerFeast.consumePendingMessage();
+  }
+
+  /**
    * Procesa el gesto de pinza de una mano para agarrar/soltar el accesorio facial actual.
    * Si está puesto y se pellizca cerca del rostro, pasa a "sujeto con la mano".
    * Si está sujeto y la misma mano vuelve a pellizcar, se lo vuelve a poner.
@@ -602,9 +687,20 @@ export class Engine {
       this.renderer.autoClear = false;
       this.renderer.render(this.maskScene, this.maskCamera);
       this.renderer.autoClear = true;
-    } else if (this.currentFilter === 'holoscan') {
-      // Modo escaneo holográfico: el wireframe/puntos ya están en this.scene
+    } else if (this.currentFilter === 'holoscan' || this.currentFilter === 'eyeglow') {
+      // Modo escaneo holográfico / fuego-destellos en los ojos: ya están en this.scene
       this.renderer.render(this.scene, this.camera);
+    } else if (this.currentFilter === 'facewarp') {
+      // Modo cara deformada: reemplaza el fondo por el video deformado (sin overlay)
+      this.faceWarp.render(this.renderer);
+    } else if (this.currentFilter === 'hamburger') {
+      // Modo hamburguesas: fondo deformado (progresivo) + hamburguesas superpuestas
+      this.scene.background = null;
+      this.faceWarp.render(this.renderer);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = true;
+      this.scene.background = this.videoTexture;
     } else if (this.glassSphere) {
       // Modo esfera de vidrio: renderiza con PostProcessing (Bloom aplicado)
       this.postProcessing.render();
