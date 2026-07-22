@@ -1,1 +1,1 @@
-// Math helper functions
+// Funciones auxiliares de matemática

@@ -1,1 +1,1 @@
-// Chromatic aberration post-process effect
+// Efecto de post-procesado de aberración cromática

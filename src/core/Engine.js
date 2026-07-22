@@ -1,10 +1,17 @@
 /**
- * Engine - WebGPURenderer初期化とメインループ管理
+ * Engine - Inicialización de WebGPURenderer y gestión del loop principal
  */
 import * as THREE from 'three/webgpu';
 import { pass } from 'three/tsl';
 import { Bloom } from '../effects/screen/Bloom.js';
 import { MetaballEffect } from '../effects/raymarching/MetaballEffect.js';
+import { VendettaMask } from '../effects/face/VendettaMask.js';
+import { VikingHelmet } from '../effects/face/VikingHelmet.js';
+import { HeadOccluder } from '../effects/face/HeadOccluder.js';
+import { FlowerFace } from '../effects/face/FlowerFace.js';
+
+// FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
+const FACE_MATRIX_FOV = 63;
 
 export class Engine {
   constructor(container) {
@@ -15,103 +22,113 @@ export class Engine {
     this.videoTexture = null;
     this.isRunning = false;
 
-    // 環境マップ用
+    // Para el mapa de entorno
     this.cubeRenderTarget = null;
     this.cubeCamera = null;
     this.envScene = null;
 
-    // テスト用透過オブジェクト
+    // Objeto transparente de prueba
     this.glassSphere = null;
     this.targetPosition = new THREE.Vector3();
-    this.smoothingFactor = 0.55;  // 追従のスムージング（0-1、大きいほど速く追従）
+    this.smoothingFactor = 0.55;  // Suavizado del seguimiento (0-1, mayor = sigue más rápido)
 
-    // 手の追従用
+    // Para el seguimiento de manos
     this.leftHandTarget = new THREE.Vector3(-100, 0, 0);
     this.rightHandTarget = new THREE.Vector3(100, 0, 0);
     this.leftHandCurrent = new THREE.Vector3(-100, 0, 0);
     this.rightHandCurrent = new THREE.Vector3(100, 0, 0);
-    this.handSphereRadius = 0.96;  // 手の球体サイズ（0.8 × 1.2）
+    this.handSphereRadius = 0.96;  // Tamaño de la esfera de la mano (0.8 × 1.2)
 
-    // メタボールエフェクト
+    // Efecto de metaballs
     this.metaballEffect = null;
-    this.useMetaball = true;  // true: レイマーチングメタボール, false: ガラス球
 
-    // 座標変換用パラメータ
-    this.distance = 5;  // カメラからの基準距離
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower')
+    this.currentFilter = 'metaball';
 
-    // フレームカウンター
+    // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
+    this.vendettaMask = null;
+    this.vikingHelmet = null;
+    this.flowerFace = null;
+    this.headOccluder = null;
+    this.maskScene = null;
+    this.maskCamera = null;
+
+    // Parámetros para la transformación de coordenadas
+    this.distance = 5;  // Distancia de referencia desde la cámara
+
+    // Contador de frames
     this.frameCount = 0;
 
-    // ポストプロセス
+    // Post-procesado
     this.postProcessing = null;
     this.chromaticOffset = null;
   }
 
   /**
-   * エンジンを初期化
-   * @param {HTMLVideoElement} video - カメラ映像のvideo要素
+   * Inicializa el engine
+   * @param {HTMLVideoElement} video - Elemento video con la imagen de la cámara
    */
   async init(video) {
     const width = video.videoWidth;
     const height = video.videoHeight;
     const aspect = width / height;
 
-    // WebGPURenderer初期化
+    // Inicializar WebGPURenderer
     this.renderer = new THREE.WebGPURenderer({ antialias: true });
-    this.renderer.setSize(width, height);
+    // Tercer argumento false: no fija el style inline del canvas (el tamaño visible lo controla el CSS)
+    this.renderer.setSize(width, height, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // 必須: WebGPUの非同期初期化
+    // Obligatorio: inicialización asíncrona de WebGPU
     await this.renderer.init();
 
     this.container.appendChild(this.renderer.domElement);
 
-    // シーン作成
+    // Crear escena
     this.scene = new THREE.Scene();
 
-    // カメラ作成（パースペクティブ）
+    // Crear cámara (perspectiva)
     this.camera = new THREE.PerspectiveCamera(65, aspect, 0.01, 1000);
     this.camera.position.z = 5;
 
-    // VideoTextureを作成
+    // Crear VideoTexture
     this.videoTexture = new THREE.VideoTexture(video);
     this.videoTexture.colorSpace = THREE.SRGBColorSpace;
     this.videoTexture.minFilter = THREE.LinearFilter;
     this.videoTexture.magFilter = THREE.LinearFilter;
 
-    // 背景に設定
+    // Establecer como fondo
     this.scene.background = this.videoTexture;
 
-    // 環境マップをセットアップ（transmission用）
+    // Configurar el mapa de entorno (para transmission)
     this.setupEnvironmentMap();
 
-    // ライトをセットアップ
+    // Configurar las luces
     this.setupLights();
 
-    // メタボールまたはガラス球を追加
-    if (this.useMetaball) {
-      this.setupMetaball();
-    } else {
-      this.createGlassSphere();
-    }
+    // Configurar el efecto de metaballs (filtro por defecto)
+    this.setupMetaball();
 
-    // ポストプロセスをセットアップ
+    // Configurar la escena/cámara para los assets 3D que siguen al rostro
+    this.setupFaceAssets(aspect);
+
+    // Configurar el post-procesado
     this.setupPostProcessing();
 
-    // リサイズ対応
+    // Soporte para resize
     window.addEventListener('resize', () => this.handleResize(video));
 
     console.log('Engine initialized with WebGPU');
   }
 
   /**
-   * 環境マップをセットアップ（transmission屈折用）
+   * Configura el mapa de entorno (para la refracción de transmission)
    */
   setupEnvironmentMap() {
-    // CubeRenderTarget作成（解像度を512に下げてテスト）
+    // Crear CubeRenderTarget (resolución reducida a 512 para pruebas)
     this.cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
       format: THREE.RGBAFormat,
       generateMipmaps: true,
@@ -119,10 +136,10 @@ export class Engine {
       colorSpace: THREE.SRGBColorSpace
     });
 
-    // CubeCamera作成
+    // Crear CubeCamera
     this.cubeCamera = new THREE.CubeCamera(0.1, 100, this.cubeRenderTarget);
 
-    // 環境マップ用シーン（videoTextureを内側に貼った球体）
+    // Escena para el mapa de entorno (esfera con el videoTexture pegado por dentro)
     this.envScene = new THREE.Scene();
     const envMaterial = new THREE.MeshBasicMaterial({
       map: this.videoTexture,
@@ -136,30 +153,30 @@ export class Engine {
   }
 
   /**
-   * メタボールエフェクトをセットアップ
+   * Configura el efecto de metaballs
    */
   setupMetaball() {
     this.metaballEffect = new MetaballEffect({
       blendFactor: 0.4,
-      ior: 1.45,           // ガラスの屈折率
-      dispersion: 0.08,    // 色収差の強さ
-      fresnelStrength: 0.9, // 反射強度（上げた）
+      ior: 1.45,           // Índice de refracción del vidrio
+      dispersion: 0.08,    // Intensidad de la aberración cromática
+      fresnelStrength: 0.9, // Intensidad del reflejo (subida)
       refractionStrength: 0.1
     });
 
-    // 背景テクスチャ（カメラ映像）を設定
+    // Establecer la textura de fondo (imagen de la cámara)
     this.metaballEffect.setBackgroundTexture(this.videoTexture);
 
-    // 環境マップ（CubeMap）を設定
+    // Establecer el mapa de entorno (CubeMap)
     this.metaballEffect.setEnvMapTexture(this.cubeRenderTarget.texture);
 
-    // フルスクリーンクワッドを作成（シーンには追加しない）
+    // Crear el quad de pantalla completa (no se agrega a la escena)
     this.metaballEffect.createFullscreenQuad();
 
-    // カメラパラメータを設定
+    // Establecer los parámetros de la cámara
     this.metaballEffect.updateCamera(this.camera);
 
-    // 初期位置を設定（メイン球 + 周回する小球）- サイズ2.25倍（1.5 x 1.5）
+    // Posiciones iniciales (esfera principal + esferas que orbitan) - tamaño x2.25 (1.5 x 1.5)
     this.metaballEffect.setSpherePosition(0, new THREE.Vector3(0, 0, 0), 1.125);
     this.metaballEffect.setSpherePosition(1, new THREE.Vector3(0.8, 0.3, 0), 0.5625);
     this.metaballEffect.setSpherePosition(2, new THREE.Vector3(-0.6, -0.2, 0.3), 0.45);
@@ -169,7 +186,55 @@ export class Engine {
   }
 
   /**
-   * ライトをセットアップ
+   * Configura la escena/cámara para los assets 3D que siguen al rostro
+   * (máscara Vendetta, casco vikingo, cara de flores).
+   * Como el facialTransformationMatrix de MediaPipe asume la cámara en el origen,
+   * se renderiza con una cámara dedicada distinta de la cámara principal (z=5)
+   */
+  setupFaceAssets(aspect) {
+    this.maskScene = new THREE.Scene();
+    this.maskCamera = new THREE.PerspectiveCamera(FACE_MATRIX_FOV, aspect, 0.01, 5000);
+    this.maskCamera.position.set(0, 0, 0);
+
+    // El oclusor de profundidad se agrega primero (con renderOrder escribe su profundidad antes que el resto)
+    this.headOccluder = new HeadOccluder();
+    this.headOccluder.addToScene(this.maskScene);
+
+    this.vendettaMask = new VendettaMask();
+    this.vendettaMask.addToScene(this.maskScene);
+
+    this.vikingHelmet = new VikingHelmet();
+    this.vikingHelmet.addToScene(this.maskScene);
+
+    this.flowerFace = new FlowerFace();
+    this.flowerFace.addToScene(this.maskScene);
+  }
+
+  /**
+   * Cambia el filtro activo
+   * @param {'metaball'|'vendetta'|'viking'|'flower'} filter
+   */
+  async setFilter(filter) {
+    if (filter === this.currentFilter) return;
+
+    if (filter === 'vendetta') {
+      await this.vendettaMask.load();
+    } else if (filter === 'viking') {
+      await this.vikingHelmet.load(this.cubeRenderTarget.texture);
+    } else if (filter === 'flower') {
+      await this.flowerFace.load();
+    }
+
+    this.currentFilter = filter;
+    this.vendettaMask.setVisible(filter === 'vendetta');
+    this.vikingHelmet.setVisible(filter === 'viking');
+    this.flowerFace.setVisible(filter === 'flower');
+    const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower';
+    this.headOccluder.setVisible(isFaceAsset);
+  }
+
+  /**
+   * Configura las luces
    */
   setupLights() {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -185,30 +250,30 @@ export class Engine {
   }
 
   /**
-   * ポストプロセスをセットアップ（Bloom）
+   * Configura el post-procesado (Bloom)
    */
   setupPostProcessing() {
-    // シーンパスを作成
+    // Crear el pass de la escena
     const scenePass = pass(this.scene, this.camera);
 
-    // scenePassからテクスチャノードを取得
+    // Obtener el texture node del scenePass
     const scenePassColor = scenePass.getTextureNode('output');
 
-    // Bloomエフェクトを作成・適用
+    // Crear y aplicar el efecto de Bloom
     this.bloomEffect = new Bloom({
-      strength: 0.6,    // 光の強さ
-      radius: 0.4,      // ぼかしの広がり (0-1)
-      threshold: 0.7    // 光り始める明るさの閾値
+      strength: 0.6,    // Intensidad de la luz
+      radius: 0.4,      // Extensión del desenfoque (0-1)
+      threshold: 0.7    // Umbral de brillo a partir del cual empieza a brillar
     });
     const finalPass = this.bloomEffect.apply(scenePassColor);
 
-    // PostProcessingを作成
+    // Crear el PostProcessing
     this.postProcessing = new THREE.PostProcessing(this.renderer);
     this.postProcessing.outputNode = finalPass;
   }
 
   /**
-   * テスト用の透過球体を作成
+   * Crea la esfera transparente de prueba
    */
   createGlassSphere() {
     const geometry = new THREE.SphereGeometry(1.2, 64, 64);
@@ -236,7 +301,7 @@ export class Engine {
   }
 
   /**
-   * メインループ開始
+   * Inicia el loop principal
    */
   start() {
     this.isRunning = true;
@@ -244,14 +309,14 @@ export class Engine {
   }
 
   /**
-   * メインループ停止
+   * Detiene el loop principal
    */
   stop() {
     this.isRunning = false;
   }
 
   /**
-   * アニメーションループ
+   * Loop de animación
    */
   animate() {
     if (!this.isRunning) return;
@@ -262,22 +327,22 @@ export class Engine {
   }
 
   /**
-   * 更新処理
+   * Procesamiento de actualización
    */
   update() {
-    if (this.useMetaball && this.metaballEffect) {
-      // メタボールモード: メイン球を顔に追従、小球は周回
+    if (this.currentFilter === 'metaball' && this.metaballEffect) {
+      // Modo metaball: la esfera principal sigue al rostro, las pequeñas orbitan
       const time = performance.now() * 0.001;
 
-      // メイン球（インデックス0）を顔位置に追従
-      // targetPositionをスムーズに追従
+      // La esfera principal (índice 0) sigue la posición del rostro
+      // Sigue targetPosition suavemente
       if (!this.currentPosition) {
         this.currentPosition = new THREE.Vector3();
       }
       this.currentPosition.lerp(this.targetPosition, this.smoothingFactor);
       this.metaballEffect.setSpherePosition(0, this.currentPosition, 1.125);
 
-      // 小球を周回させる
+      // Hacer que las esferas pequeñas orbiten
       const orbitRadius = 0.8;
       for (let i = 1; i < 4; i++) {
         const angle = time * (1.5 - i * 0.3) + (i * Math.PI * 2 / 3);
@@ -291,46 +356,46 @@ export class Engine {
         this.metaballEffect.setSpherePosition(i, pos, 0.45 + i * 0.1125);
       }
 
-      // 手の球体を更新（インデックス4: 左手、5: 右手）
+      // Actualizar las esferas de las manos (índice 4: mano izquierda, 5: mano derecha)
       this.leftHandCurrent.lerp(this.leftHandTarget, this.smoothingFactor);
       this.rightHandCurrent.lerp(this.rightHandTarget, this.smoothingFactor);
       this.metaballEffect.setSpherePosition(4, this.leftHandCurrent, this.handSphereRadius);
       this.metaballEffect.setSpherePosition(5, this.rightHandCurrent, this.handSphereRadius);
     } else if (this.glassSphere) {
-      // ガラス球モード
+      // Modo esfera de vidrio
       this.glassSphere.rotation.y += 0.01;
       this.glassSphere.position.lerp(this.targetPosition, this.smoothingFactor);
     }
   }
 
   /**
-   * MediaPipeの正規化座標をThree.js 3D座標に変換
-   * @param {number} x - 正規化X座標（0-1）
-   * @param {number} y - 正規化Y座標（0-1）
-   * @param {number} z - 相対Z座標
+   * Convierte coordenadas normalizadas de MediaPipe a coordenadas 3D de Three.js
+   * @param {number} x - Coordenada X normalizada (0-1)
+   * @param {number} y - Coordenada Y normalizada (0-1)
+   * @param {number} z - Coordenada Z relativa
    */
   projectToWorld(x, y, z = 0) {
-    // NDC座標に変換（-1 to 1）
-    // Xは反転しない（映像が既に鏡像）
+    // Convertir a coordenadas NDC (-1 a 1)
+    // No se invierte X (el video ya está en espejo)
     const ndcX = (x - 0.5) * 2;
     const ndcY = -(y - 0.5) * 2;
 
-    // NDCからワールド座標に変換
+    // Convertir de NDC a coordenadas de mundo
     const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
     vector.unproject(this.camera);
 
-    // カメラからの方向を計算
+    // Calcular la dirección desde la cámara
     const dir = vector.sub(this.camera.position).normalize();
 
-    // Z値を考慮した距離
+    // Distancia considerando el valor de Z
     const dist = this.distance - z * 3;
 
-    // 最終位置を計算
+    // Calcular la posición final
     return this.camera.position.clone().add(dir.multiplyScalar(dist));
   }
 
   /**
-   * 顔のランドマークで球体位置を更新
+   * Actualiza la posición de la esfera según los landmarks del rostro
    * @param {Object} landmark - {x, y, z}
    */
   updateFacePosition(landmark) {
@@ -340,21 +405,38 @@ export class Engine {
 
     const worldPos = this.projectToWorld(landmark.x, landmark.y, landmark.z);
 
-    // オフセット: x=右、y=上、z=手前
-    worldPos.x += 0;    // 右にずらす
-    worldPos.y += 0.5;  // 上にずらす（顔の上に球体）
-    worldPos.z += 0;    // 手前にずらす
+    // Offset: x=derecha, y=arriba, z=hacia adelante
+    worldPos.x += 0;    // Desplazar a la derecha
+    worldPos.y += 0.5;  // Desplazar hacia arriba (esfera sobre el rostro)
+    worldPos.z += 0;    // Desplazar hacia adelante
 
     this.targetPosition.copy(worldPos);
   }
 
   /**
-   * 左手の位置を更新
+   * Actualiza la transformación de los assets 3D que siguen al rostro
+   * @param {Float32Array|number[]|null} matrixData - facialTransformationMatrixes[0].data
+   */
+  updateFaceTransform(matrixData) {
+    if (this.currentFilter === 'vendetta' && this.vendettaMask) {
+      this.vendettaMask.updateTransform(matrixData);
+      this.headOccluder.updateTransform(matrixData);
+    } else if (this.currentFilter === 'viking' && this.vikingHelmet) {
+      this.vikingHelmet.updateTransform(matrixData);
+      this.headOccluder.updateTransform(matrixData);
+    } else if (this.currentFilter === 'flower' && this.flowerFace) {
+      this.flowerFace.updateTransform(matrixData);
+      this.headOccluder.updateTransform(matrixData);
+    }
+  }
+
+  /**
+   * Actualiza la posición de la mano izquierda
    * @param {Object|null} landmark - {x, y, z} or null
    */
   updateLeftHandPosition(landmark) {
     if (!landmark) {
-      // 手が検出されない場合は画面外に
+      // Si no se detecta la mano, la manda fuera de pantalla
       this.leftHandTarget.set(-100, 0, 0);
       return;
     }
@@ -364,12 +446,12 @@ export class Engine {
   }
 
   /**
-   * 右手の位置を更新
+   * Actualiza la posición de la mano derecha
    * @param {Object|null} landmark - {x, y, z} or null
    */
   updateRightHandPosition(landmark) {
     if (!landmark) {
-      // 手が検出されない場合は画面外に
+      // Si no se detecta la mano, la manda fuera de pantalla
       this.rightHandTarget.set(100, 0, 0);
       return;
     }
@@ -379,28 +461,34 @@ export class Engine {
   }
 
   /**
-   * レンダリング
+   * Renderizado
    */
   render() {
     this.frameCount++;
 
-    // 環境マップを更新（2フレームごと）
+    // Actualizar el mapa de entorno (cada 2 frames)
     if (this.frameCount % 2 === 0) {
       this.cubeCamera.update(this.renderer, this.envScene);
     }
 
-    if (this.useMetaball && this.metaballEffect) {
-      // メタボールモード: 背景をレンダリング後、メタボールをオーバーレイ
+    if (this.currentFilter === 'metaball' && this.metaballEffect) {
+      // Modo metaball: renderiza el fondo y luego superpone el metaball
       this.renderer.render(this.scene, this.camera);
       this.metaballEffect.render(this.renderer);
-    } else {
-      // ガラス球モード: PostProcessingでレンダリング（Bloom適用）
+    } else if (this.currentFilter === 'vendetta' || this.currentFilter === 'viking' || this.currentFilter === 'flower') {
+      // Modo asset 3D que sigue al rostro: renderiza el fondo y luego superpone el asset
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.maskScene, this.maskCamera);
+      this.renderer.autoClear = true;
+    } else if (this.glassSphere) {
+      // Modo esfera de vidrio: renderiza con PostProcessing (Bloom aplicado)
       this.postProcessing.render();
     }
   }
 
   /**
-   * リサイズ処理
+   * Procesamiento de resize
    */
   handleResize(video) {
     const width = video.videoWidth;
@@ -408,11 +496,17 @@ export class Engine {
 
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
+
+    if (this.maskCamera) {
+      this.maskCamera.aspect = width / height;
+      this.maskCamera.updateProjectionMatrix();
+    }
+
+    this.renderer.setSize(width, height, false);
   }
 
   /**
-   * リソース解放
+   * Libera los recursos
    */
   dispose() {
     this.stop();

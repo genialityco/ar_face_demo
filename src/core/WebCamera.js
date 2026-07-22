@@ -1,5 +1,5 @@
 /**
- * WebCamera - Webカメラ映像の取得と管理
+ * WebCamera - Obtención y gestión de la imagen de la webcam
  */
 export class WebCamera {
   constructor() {
@@ -8,19 +8,19 @@ export class WebCamera {
   }
 
   /**
-   * カメラを初期化して映像取得を開始
+   * Inicializa la cámara y empieza a obtener la imagen
    */
   async init() {
-    // video要素を作成
+    // Crear el elemento video
     this.video = document.createElement('video');
     this.video.setAttribute('playsinline', '');
     this.video.setAttribute('autoplay', '');
     this.video.setAttribute('muted', '');
 
-    // カメラストリームを取得
+    // Obtener el stream de la cámara
     const constraints = {
       video: {
-        facingMode: 'user',  // 前面カメラ
+        facingMode: 'user',  // Cámara frontal
         width: { ideal: 1920 },
         height: { ideal: 1080 },
         frameRate: { ideal: 30 }
@@ -41,14 +41,14 @@ export class WebCamera {
   }
 
   /**
-   * video要素を取得
+   * Obtiene el elemento video
    */
   getVideo() {
     return this.video;
   }
 
   /**
-   * 映像サイズを取得
+   * Obtiene el tamaño de la imagen
    */
   getSize() {
     if (!this.video) return { width: 0, height: 0 };
@@ -59,7 +59,7 @@ export class WebCamera {
   }
 
   /**
-   * リソース解放
+   * Libera los recursos
    */
   dispose() {
     if (this.stream) {

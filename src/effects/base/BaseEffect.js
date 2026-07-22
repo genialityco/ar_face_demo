@@ -1,1 +1,1 @@
-// Base class for all effects
+// Clase base para todos los efectos

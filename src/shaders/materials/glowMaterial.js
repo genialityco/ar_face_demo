@@ -1,1 +1,1 @@
-// Glow TSL material
+// Material TSL de resplandor (glow)

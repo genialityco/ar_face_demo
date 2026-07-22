@@ -26,13 +26,52 @@
       }
       #container {
         position: relative;
+        width: min(480px, 90vw);
       }
       video {
         display: none;
       }
       canvas {
-        max-width: 100%;
-        max-height: 100vh;
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: 80vh;
+        border-radius: 12px;
+      }
+      #filter-controls {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: rgba(20, 20, 20, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+      }
+      #filter-controls label {
+        font-size: 14px;
+        opacity: 0.8;
+      }
+      #filter-controls select {
+        background: #1a1a1a;
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 14px;
+      }
+      #filter-controls select:disabled {
+        opacity: 0.5;
+      }
+      #filter-status {
+        font-size: 12px;
+        opacity: 0.7;
+        min-width: 90px;
       }
     </style>
   </head>

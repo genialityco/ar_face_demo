@@ -1,1 +1,1 @@
-// Aura effect around face
+// Efecto de aura alrededor del rostro

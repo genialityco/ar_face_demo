@@ -1,1 +1,1 @@
-// Glitch noise effect
+// Efecto de ruido glitch

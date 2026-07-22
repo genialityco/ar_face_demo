@@ -1,1 +1,1 @@
-// Pixelation effect
+// Efecto de pixelado

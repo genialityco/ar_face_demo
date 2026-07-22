@@ -1,1 +1,1 @@
-// Effect registration and management
+// Registro y gestión de efectos

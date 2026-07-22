@@ -1,1 +1,1 @@
-// Face landmark index definitions
+// Definiciones de índices de landmarks del rostro

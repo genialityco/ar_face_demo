@@ -1,1 +1,1 @@
-// Face outline neon effect
+// Efecto neón en el contorno del rostro

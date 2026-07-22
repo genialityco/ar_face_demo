@@ -1,5 +1,5 @@
 /**
- * HandTracker - MediaPipe Hand Landmarkerのラッパー
+ * HandTracker - Wrapper del MediaPipe Hand Landmarker
  */
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
@@ -11,7 +11,7 @@ export class HandTracker {
   }
 
   /**
-   * MediaPipe Hand Landmarkerを初期化
+   * Inicializa el MediaPipe Hand Landmarker
    */
   async init() {
     console.log('Initializing MediaPipe Hand Landmarker...');
@@ -35,7 +35,7 @@ export class HandTracker {
   }
 
   /**
-   * 手検出を実行
+   * Ejecuta la detección de manos
    * @param {HTMLVideoElement} video
    * @param {number} timestamp
    */
@@ -50,7 +50,7 @@ export class HandTracker {
   }
 
   /**
-   * 手が検出されているか
+   * Indica si se detectaron manos
    */
   hasHands() {
     return this.lastResult &&
@@ -59,7 +59,7 @@ export class HandTracker {
   }
 
   /**
-   * 検出された手の数を取得
+   * Obtiene la cantidad de manos detectadas
    */
   getHandCount() {
     if (!this.hasHands()) return 0;
@@ -67,8 +67,8 @@ export class HandTracker {
   }
 
   /**
-   * 特定の手のランドマーク（21点）を取得
-   * @param {number} handIndex 手のインデックス（0または1）
+   * Obtiene los landmarks (21 puntos) de una mano específica
+   * @param {number} handIndex Índice de la mano (0 o 1)
    * @returns {Array|null} [{x, y, z}, ...]
    */
   getLandmarks(handIndex = 0) {
@@ -77,8 +77,8 @@ export class HandTracker {
   }
 
   /**
-   * 手の種類（左/右）を取得
-   * @param {number} handIndex 手のインデックス
+   * Obtiene el tipo de mano (izquierda/derecha)
+   * @param {number} handIndex Índice de la mano
    * @returns {string|null} 'Left' or 'Right'
    */
   getHandedness(handIndex = 0) {
@@ -87,14 +87,14 @@ export class HandTracker {
   }
 
   /**
-   * 掌の中心位置を取得（ランドマーク0: 手首、9: 中指の付け根の中間）
-   * @param {number} handIndex 手のインデックス
+   * Obtiene el centro de la palma (punto medio entre landmark 0: muñeca y 9: base del dedo medio)
+   * @param {number} handIndex Índice de la mano
    */
   getPalmCenter(handIndex = 0) {
     const landmarks = this.getLandmarks(handIndex);
     if (!landmarks) return null;
 
-    // 手首(0)と中指の付け根(9)の中間を掌の中心とする
+    // El centro de la palma es el punto medio entre la muñeca (0) y la base del dedo medio (9)
     const wrist = landmarks[0];
     const middleMcp = landmarks[9];
 
@@ -106,7 +106,7 @@ export class HandTracker {
   }
 
   /**
-   * 左手の掌中心を取得
+   * Obtiene el centro de la palma de la mano izquierda
    */
   getLeftPalm() {
     for (let i = 0; i < this.getHandCount(); i++) {
@@ -118,7 +118,7 @@ export class HandTracker {
   }
 
   /**
-   * 右手の掌中心を取得
+   * Obtiene el centro de la palma de la mano derecha
    */
   getRightPalm() {
     for (let i = 0; i < this.getHandCount(); i++) {
@@ -130,7 +130,7 @@ export class HandTracker {
   }
 
   /**
-   * リソース解放
+   * Libera los recursos
    */
   dispose() {
     if (this.handLandmarker) {

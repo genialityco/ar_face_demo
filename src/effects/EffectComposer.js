@@ -1,1 +1,1 @@
-// Post-process chain management
+// Gestión de la cadena de post-procesado

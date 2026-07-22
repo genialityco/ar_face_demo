@@ -1,1 +1,1 @@
-// Ripple distortion TSL node
+// Node TSL de distorsión de ondas (ripple)

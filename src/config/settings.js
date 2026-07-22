@@ -1,1 +1,1 @@
-// Configuration and default values
+// Configuración y valores por defecto

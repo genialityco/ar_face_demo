@@ -1,1 +1,1 @@
-// Particle update compute shader
+// Compute shader de actualización de partículas

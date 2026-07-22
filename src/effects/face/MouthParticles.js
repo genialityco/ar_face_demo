@@ -1,1 +1,1 @@
-// Particle emission from mouth
+// Emisión de partículas desde la boca

@@ -1,1 +1,1 @@
-// Particle initialization compute shader
+// Compute shader de inicialización de partículas

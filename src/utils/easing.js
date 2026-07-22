@@ -1,1 +1,1 @@
-// Easing functions
+// Funciones de easing

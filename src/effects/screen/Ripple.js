@@ -1,1 +1,1 @@
-// Ripple distortion effect
+// Efecto de distorsión de ondas (ripple)

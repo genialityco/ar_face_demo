@@ -1,1 +1,1 @@
-// FPS and debug info display
+// Muestra el FPS e información de debug

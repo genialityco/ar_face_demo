@@ -1,5 +1,5 @@
 /**
- * FaceTracker - MediaPipe Face Landmarkerのラッパー
+ * FaceTracker - Wrapper del MediaPipe Face Landmarker
  */
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
@@ -11,7 +11,7 @@ export class FaceTracker {
   }
 
   /**
-   * MediaPipe Face Landmarkerを初期化
+   * Inicializa el MediaPipe Face Landmarker
    */
   async init() {
     console.log('Initializing MediaPipe Face Landmarker...');
@@ -37,7 +37,7 @@ export class FaceTracker {
   }
 
   /**
-   * 顔検出を実行
+   * Ejecuta la detección de rostro
    * @param {HTMLVideoElement} video
    * @param {number} timestamp
    */
@@ -52,7 +52,7 @@ export class FaceTracker {
   }
 
   /**
-   * 顔が検出されているか
+   * Indica si se detectó un rostro
    */
   hasFace() {
     return this.lastResult &&
@@ -61,7 +61,7 @@ export class FaceTracker {
   }
 
   /**
-   * ランドマーク（468点）を取得
+   * Obtiene los landmarks (468 puntos)
    * @returns {Array|null} [{x, y, z}, ...]
    */
   getLandmarks() {
@@ -70,7 +70,7 @@ export class FaceTracker {
   }
 
   /**
-   * ブレンドシェイプ（表情）を取得
+   * Obtiene los blendshapes (expresiones faciales)
    * @returns {Object|null} { mouthOpen: 0.5, eyeBlinkLeft: 0.1, ... }
    */
   getBlendshapes() {
@@ -84,7 +84,7 @@ export class FaceTracker {
   }
 
   /**
-   * 顔の変換行列を取得
+   * Obtiene la matriz de transformación del rostro
    * @returns {Array|null} 4x4 matrix
    */
   getTransformMatrix() {
@@ -93,8 +93,8 @@ export class FaceTracker {
   }
 
   /**
-   * 特定のランドマークを取得
-   * @param {number} index ランドマークインデックス
+   * Obtiene un landmark específico
+   * @param {number} index Índice del landmark
    */
   getLandmark(index) {
     const landmarks = this.getLandmarks();
@@ -103,14 +103,14 @@ export class FaceTracker {
   }
 
   /**
-   * 鼻先（顔の中心）を取得
+   * Obtiene la punta de la nariz (centro del rostro)
    */
   getNose() {
-    return this.getLandmark(1); // 鼻先
+    return this.getLandmark(1); // Punta de la nariz
   }
 
   /**
-   * リソース解放
+   * Libera los recursos
    */
   dispose() {
     if (this.faceLandmarker) {
