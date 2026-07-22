@@ -1,9 +1,18 @@
 /**
- * Controls - UI de selección de filtro
+ * Controls - UI de selección de filtro y tamaño del cuadro de la cámara
  */
+const CAMERA_SIZES = [
+  { value: '320', label: 'Chico' },
+  { value: '480', label: 'Mediano' },
+  { value: '640', label: 'Grande' },
+  { value: '900', label: 'Extra Grande' }
+];
+const DEFAULT_CAMERA_SIZE = '480';
+
 export class Controls {
-  constructor({ onFilterChange } = {}) {
+  constructor({ onFilterChange, onSizeChange } = {}) {
     this.onFilterChange = onFilterChange;
+    this.onSizeChange = onSizeChange;
     this.element = this._createElement();
     document.body.appendChild(this.element);
   }
@@ -27,7 +36,8 @@ export class Controls {
       { value: 'holoscan', label: 'Escaneo Holográfico' },
       { value: 'eyeglow', label: 'Fuego y Brillo en los Ojos' },
       //{ value: 'facewarp', label: 'Cara Inflada' },
-      { value: 'hamburger', label: 'Comilona de Hamburguesas' }
+      { value: 'hamburger', label: 'Comilona de Hamburguesas' },
+      { value: 'money', label: 'Lluvia de Plata' }
     ];
 
     for (const opt of options) {
@@ -44,12 +54,34 @@ export class Controls {
     const status = document.createElement('span');
     status.id = 'filter-status';
 
+    const sizeLabel = document.createElement('label');
+    sizeLabel.htmlFor = 'size-select';
+    sizeLabel.textContent = 'Tamaño';
+
+    const sizeSelect = document.createElement('select');
+    sizeSelect.id = 'size-select';
+
+    for (const opt of CAMERA_SIZES) {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      sizeSelect.appendChild(option);
+    }
+    sizeSelect.value = DEFAULT_CAMERA_SIZE;
+
+    sizeSelect.addEventListener('change', (e) => {
+      this.onSizeChange?.(Number(e.target.value));
+    });
+
     wrapper.appendChild(label);
     wrapper.appendChild(select);
     wrapper.appendChild(status);
+    wrapper.appendChild(sizeLabel);
+    wrapper.appendChild(sizeSelect);
 
     this.select = select;
     this.status = status;
+    this.sizeSelect = sizeSelect;
 
     return wrapper;
   }

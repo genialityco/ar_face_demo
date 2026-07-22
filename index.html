@@ -26,7 +26,7 @@
       }
       #container {
         position: relative;
-        width: min(480px, 90vw);
+        width: min(var(--camera-size, 480px), 90vw);
       }
       video {
         display: none;
@@ -95,6 +95,29 @@
       #message-overlay.message-overlay-visible {
         opacity: 1;
         transform: translate(-50%, -50%) scale(1);
+      }
+      #debug-panel {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        padding: 6px 12px;
+        background: rgba(20, 20, 20, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        color: #0f0;
+        font-family: monospace;
+        font-size: 13px;
+        z-index: 15;
+      }
+      #debug-mood-toggle-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: white;
+        cursor: pointer;
       }
     </style>
   </head>

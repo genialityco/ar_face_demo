@@ -13,6 +13,8 @@ import { HoloScan } from '../effects/face/HoloScan.js';
 import { EyeGlow } from '../effects/face/EyeGlow.js';
 import { FaceWarp } from '../effects/face/FaceWarp.js';
 import { HamburgerFeast } from '../effects/face/HamburgerFeast.js';
+import { MoneyRain } from '../effects/face/MoneyRain.js';
+import { MoodWarp } from '../effects/face/MoodWarp.js';
 
 // FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
 const FACE_MATRIX_FOV = 63;
@@ -55,7 +57,7 @@ export class Engine {
     // Efecto de metaballs
     this.metaballEffect = null;
 
-    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger')
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money')
     this.currentFilter = 'metaball';
 
     // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
@@ -77,6 +79,12 @@ export class Engine {
 
     // Hamburguesas agarrables que aumentan progresivamente el FaceWarp al comerlas
     this.hamburgerFeast = null;
+
+    // Lluvia de billetes agarrables: la expresión (boca/cejas deformadas en el video) pasa de triste a feliz
+    this.moneyRain = null;
+    this.moodWarp = null;
+    // Switch de debug: fuerza la expresión feliz, ignorando el progreso real
+    this.debugMoodHappy = false;
 
     // Estado de "puesto" / "sujeto con la mano" para los accesorios que se pueden agarrar
     this.wearState = {
@@ -165,6 +173,14 @@ export class Engine {
     // Configurar las hamburguesas agarrables
     this.hamburgerFeast = new HamburgerFeast();
     this.hamburgerFeast.addToScene(this.scene);
+
+    // Configurar la lluvia de billetes
+    this.moneyRain = new MoneyRain();
+    this.moneyRain.addToScene(this.scene);
+
+    // Configurar la deformación de expresión (triste a feliz)
+    this.moodWarp = new MoodWarp();
+    this.moodWarp.setBackgroundTexture(this.videoTexture);
 
     // Configurar el post-procesado
     this.setupPostProcessing();
@@ -263,7 +279,7 @@ export class Engine {
 
   /**
    * Cambia el filtro activo
-   * @param {'metaball'|'vendetta'|'viking'|'flower'|'holoscan'|'eyeglow'|'facewarp'|'hamburger'} filter
+   * @param {'metaball'|'vendetta'|'viking'|'flower'|'holoscan'|'eyeglow'|'facewarp'|'hamburger'|'money'} filter
    */
   async setFilter(filter) {
     if (filter === this.currentFilter) return;
@@ -282,6 +298,8 @@ export class Engine {
       await this.flowerFace.load();
     } else if (filter === 'hamburger') {
       await this.hamburgerFeast.load();
+    } else if (filter === 'money') {
+      await this.moneyRain.load();
     }
 
     this.currentFilter = filter;
@@ -291,6 +309,7 @@ export class Engine {
     this.holoScan.setVisible(filter === 'holoscan');
     this.eyeGlow.setVisible(filter === 'eyeglow');
     this.hamburgerFeast.setVisible(filter === 'hamburger');
+    this.moneyRain.setVisible(filter === 'money');
     const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower';
     this.headOccluder.setVisible(isFaceAsset);
 
@@ -298,6 +317,10 @@ export class Engine {
       // Siempre empieza sin ningún efecto aplicado
       this.hamburgerFeast.reset();
       this.faceWarp.bulgeAmount = 0;
+    } else if (filter === 'money') {
+      // Siempre empieza triste (sin billetes guardados) y con el switch de debug apagado
+      this.moneyRain.reset();
+      this.debugMoodHappy = false;
     }
   }
 
@@ -574,6 +597,45 @@ export class Engine {
   }
 
   /**
+   * Actualiza la lluvia de billetes y la deformación de expresión (triste a feliz)
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   * @param {{Left:{landmarks:Array|null,isPincerGrab:boolean}, Right:{landmarks:Array|null,isPincerGrab:boolean}}} hands
+   */
+  updateMoneyRain(landmarks, hands) {
+    if (this.currentFilter !== 'money' || !this.moneyRain) return;
+
+    this.moneyRain.update({
+      hands,
+      projectFn: (x, y, z) => this.projectToWorld(x, y, z),
+      time: performance.now() * 0.001
+    });
+
+    // El switch de debug fuerza feliz (1) ignorando el progreso real; si no está
+    // activado, usa el progreso real de la lluvia de billetes
+    this.moodWarp.progress = this.debugMoodHappy ? 1 : this.moneyRain.getProgress();
+    this.moodWarp.update(landmarks);
+  }
+
+  /**
+   * Activa/desactiva el switch de debug que fuerza la expresión feliz,
+   * sin depender del progreso real de la lluvia de billetes
+   * @param {boolean} isHappy
+   */
+  setDebugMoodHappy(isHappy) {
+    this.debugMoodHappy = isHappy;
+  }
+
+  /**
+   * Texto de debug para el filtro actual (ej. progreso de felicidad), o null si no aplica
+   */
+  getDebugText() {
+    if (this.currentFilter === 'money' && this.moneyRain) {
+      return `Felicidad: ${Math.round(this.moneyRain.getProgress() * 100)}%`;
+    }
+    return null;
+  }
+
+  /**
    * Devuelve y limpia el mensaje flotante pendiente (ej. "¡Bajaste de peso!"), o null
    */
   consumePendingMessage() {
@@ -697,6 +759,14 @@ export class Engine {
       // Modo hamburguesas: fondo deformado (progresivo) + hamburguesas superpuestas
       this.scene.background = null;
       this.faceWarp.render(this.renderer);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = true;
+      this.scene.background = this.videoTexture;
+    } else if (this.currentFilter === 'money') {
+      // Modo lluvia de billetes: fondo con boca/cejas deformadas + billetes superpuestos
+      this.scene.background = null;
+      this.moodWarp.render(this.renderer);
       this.renderer.autoClear = false;
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = true;

@@ -7,6 +7,7 @@ import { FaceTracker } from './core/FaceTracker.js';
 import { HandTracker } from './core/HandTracker.js';
 import { Controls } from './ui/Controls.js';
 import { MessageOverlay } from './ui/MessageOverlay.js';
+import { DebugPanel } from './ui/DebugPanel.js';
 
 class App {
   constructor() {
@@ -16,6 +17,7 @@ class App {
     this.handTracker = null;
     this.controls = null;
     this.messageOverlay = null;
+    this.debugPanel = null;
     this.frameCount = 0;
   }
 
@@ -44,9 +46,15 @@ class App {
 
       // 5. Inicializar UI de selección de filtro
       this.controls = new Controls({
-        onFilterChange: (filter) => this.handleFilterChange(filter)
+        onFilterChange: (filter) => this.handleFilterChange(filter),
+        onSizeChange: (size) => {
+          document.documentElement.style.setProperty('--camera-size', `${size}px`);
+        }
       });
       this.messageOverlay = new MessageOverlay();
+      this.debugPanel = new DebugPanel({
+        onMoodToggle: (isHappy) => this.engine.setDebugMoodHappy(isHappy)
+      });
 
       // 6. Iniciar loop principal (cambiado a loop personalizado)
       console.log('Starting render loop...');
@@ -74,6 +82,14 @@ class App {
     const pendingMessage = this.engine.consumePendingMessage();
     if (pendingMessage) {
       this.messageOverlay.show(pendingMessage);
+    }
+
+    // Panel de debug (ej. progreso de felicidad en el filtro de dinero)
+    const debugText = this.engine.getDebugText();
+    if (debugText) {
+      this.debugPanel.show(debugText);
+    } else {
+      this.debugPanel.hide();
     }
 
     // Actualizar objeto según posición del rostro (cada frame)
@@ -118,6 +134,7 @@ class App {
     };
     this.engine.updateHamburgerFeast(landmarks, blendshapes, hands);
     this.engine.updateFaceWarp(landmarks);
+    this.engine.updateMoneyRain(landmarks, hands);
 
     // Actualizar y renderizar el engine
     this.engine.update();
