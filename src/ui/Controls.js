@@ -23,7 +23,8 @@ export class Controls {
       { value: 'metaball', label: 'Cristal (Metaball)' },
       { value: 'vendetta', label: 'Máscara Vendetta' },
       { value: 'viking', label: 'Casco Vikingo' },
-      { value: 'flower', label: 'Cara de Flores' }
+      { value: 'flower', label: 'Cara de Flores' },
+      { value: 'holoscan', label: 'Escaneo Holográfico' }
     ];
 
     for (const opt of options) {

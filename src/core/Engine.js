@@ -9,9 +9,16 @@ import { VendettaMask } from '../effects/face/VendettaMask.js';
 import { VikingHelmet } from '../effects/face/VikingHelmet.js';
 import { HeadOccluder } from '../effects/face/HeadOccluder.js';
 import { FlowerFace } from '../effects/face/FlowerFace.js';
+import { HoloScan } from '../effects/face/HoloScan.js';
 
 // FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
 const FACE_MATRIX_FOV = 63;
+
+// Distancia de profundidad (unidades del maskScene) usada al proyectar la posición de la mano
+const HAND_HOLD_DEPTH = 30;
+
+// Distancia normalizada (0-1, espacio de imagen) entre mano y rostro para permitir "sacarse" el accesorio
+const GRAB_PROXIMITY_THRESHOLD = 0.35;
 
 export class Engine {
   constructor(container) {
@@ -42,7 +49,7 @@ export class Engine {
     // Efecto de metaballs
     this.metaballEffect = null;
 
-    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower')
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan')
     this.currentFilter = 'metaball';
 
     // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
@@ -52,6 +59,19 @@ export class Engine {
     this.headOccluder = null;
     this.maskScene = null;
     this.maskCamera = null;
+
+    // Efecto de escaneo holográfico (usa landmarks 2D, se renderiza en la escena principal)
+    this.holoScan = null;
+
+    // Estado de "puesto" / "sujeto con la mano" para los accesorios que se pueden agarrar
+    this.wearState = {
+      vendetta: { worn: true, heldBy: null, heldDepth: HAND_HOLD_DEPTH },
+      viking: { worn: true, heldBy: null, heldDepth: HAND_HOLD_DEPTH }
+    };
+    this.prevPinch = { Left: false, Right: false };
+    // Última profundidad real del rostro (según facialTransformationMatrix), para
+    // que al agarrar el accesorio mantenga el mismo tamaño que tenía puesto
+    this.lastFaceDepth = { vendetta: HAND_HOLD_DEPTH, viking: HAND_HOLD_DEPTH };
 
     // Parámetros para la transformación de coordenadas
     this.distance = 5;  // Distancia de referencia desde la cámara
@@ -114,6 +134,10 @@ export class Engine {
 
     // Configurar la escena/cámara para los assets 3D que siguen al rostro
     this.setupFaceAssets(aspect);
+
+    // Configurar el efecto de escaneo holográfico
+    this.holoScan = new HoloScan();
+    this.holoScan.addToScene(this.scene);
 
     // Configurar el post-procesado
     this.setupPostProcessing();
@@ -212,10 +236,16 @@ export class Engine {
 
   /**
    * Cambia el filtro activo
-   * @param {'metaball'|'vendetta'|'viking'|'flower'} filter
+   * @param {'metaball'|'vendetta'|'viking'|'flower'|'holoscan'} filter
    */
   async setFilter(filter) {
     if (filter === this.currentFilter) return;
+
+    // Al salir de un filtro con accesorio agarrable, reiniciar su estado (vuelve "puesto")
+    if (this.wearState[this.currentFilter]) {
+      this.wearState[this.currentFilter].worn = true;
+      this.wearState[this.currentFilter].heldBy = null;
+    }
 
     if (filter === 'vendetta') {
       await this.vendettaMask.load();
@@ -229,6 +259,7 @@ export class Engine {
     this.vendettaMask.setVisible(filter === 'vendetta');
     this.vikingHelmet.setVisible(filter === 'viking');
     this.flowerFace.setVisible(filter === 'flower');
+    this.holoScan.setVisible(filter === 'holoscan');
     const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower';
     this.headOccluder.setVisible(isFaceAsset);
   }
@@ -395,6 +426,26 @@ export class Engine {
   }
 
   /**
+   * Convierte coordenadas normalizadas de MediaPipe a coordenadas de mundo del maskScene.
+   * El maskCamera está en el origen (no en z=5 como la cámara principal), por eso
+   * se necesita esta proyección separada para ubicar objetos ahí (ej: accesorio en la mano)
+   * @param {number} x - Coordenada X normalizada (0-1)
+   * @param {number} y - Coordenada Y normalizada (0-1)
+   * @param {number} depth - Distancia a lo largo del rayo de la cámara
+   */
+  projectToMaskWorld(x, y, depth = HAND_HOLD_DEPTH) {
+    const ndcX = (x - 0.5) * 2;
+    const ndcY = -(y - 0.5) * 2;
+
+    const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+    vector.unproject(this.maskCamera);
+
+    const dir = vector.sub(this.maskCamera.position).normalize();
+
+    return this.maskCamera.position.clone().add(dir.multiplyScalar(depth));
+  }
+
+  /**
    * Actualiza la posición de la esfera según los landmarks del rostro
    * @param {Object} landmark - {x, y, z}
    */
@@ -419,14 +470,84 @@ export class Engine {
    */
   updateFaceTransform(matrixData) {
     if (this.currentFilter === 'vendetta' && this.vendettaMask) {
-      this.vendettaMask.updateTransform(matrixData);
+      if (this.wearState.vendetta.worn) {
+        this.vendettaMask.updateTransform(matrixData);
+        if (matrixData) this.lastFaceDepth.vendetta = -matrixData[14];
+      }
       this.headOccluder.updateTransform(matrixData);
     } else if (this.currentFilter === 'viking' && this.vikingHelmet) {
-      this.vikingHelmet.updateTransform(matrixData);
+      if (this.wearState.viking.worn) {
+        this.vikingHelmet.updateTransform(matrixData);
+        if (matrixData) this.lastFaceDepth.viking = -matrixData[14];
+      }
       this.headOccluder.updateTransform(matrixData);
     } else if (this.currentFilter === 'flower' && this.flowerFace) {
       this.flowerFace.updateTransform(matrixData);
       this.headOccluder.updateTransform(matrixData);
+    }
+  }
+
+  /**
+   * Actualiza el efecto de escaneo holográfico con los landmarks del rostro
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   */
+  updateFaceLandmarks(landmarks) {
+    if (this.currentFilter !== 'holoscan' || !this.holoScan) return;
+    this.holoScan.update(landmarks, (x, y, z) => this.projectToWorld(x, y, z));
+  }
+
+  /**
+   * Procesa el gesto de pinza de una mano para agarrar/soltar el accesorio facial actual.
+   * Si está puesto y se pellizca cerca del rostro, pasa a "sujeto con la mano".
+   * Si está sujeto y la misma mano vuelve a pellizcar, se lo vuelve a poner.
+   * @param {'Left'|'Right'} handedness
+   * @param {{x:number,y:number,z:number}|null} palm - Centro de la palma (coordenadas normalizadas)
+   * @param {boolean} isPinching
+   * @param {{x:number,y:number}|null} facePoint - Punto de referencia del rostro (coordenadas normalizadas)
+   */
+  updateHandGrab(handedness, palm, isPinching, facePoint) {
+    const wasPinching = this.prevPinch[handedness];
+    this.prevPinch[handedness] = isPinching;
+    const pinchStarted = isPinching && !wasPinching;
+
+    const accessory = this.currentFilter === 'vendetta' ? this.vendettaMask
+      : this.currentFilter === 'viking' ? this.vikingHelmet
+      : null;
+    const state = this.wearState[this.currentFilter];
+
+    if (!accessory || !state) return;
+
+    // Mientras está sujeto por esta mano, seguir su posición cada frame
+    // (a la misma profundidad que tenía puesto, para que no cambie de tamaño)
+    if (!state.worn && state.heldBy === handedness) {
+      if (palm) {
+        const worldPos = this.projectToMaskWorld(palm.x, palm.y, state.heldDepth);
+        accessory.setHeldPosition(worldPos);
+      } else {
+        // Se perdió el seguimiento de la mano que lo sostenía: vuelve a su posición en el rostro
+        state.worn = true;
+        state.heldBy = null;
+      }
+    }
+
+    if (!pinchStarted || !palm) return;
+
+    if (state.worn) {
+      // Pellizco cerca del rostro: sacarlo y dejarlo en la mano
+      if (facePoint) {
+        const dx = palm.x - facePoint.x;
+        const dy = palm.y - facePoint.y;
+        if (Math.sqrt(dx * dx + dy * dy) < GRAB_PROXIMITY_THRESHOLD) {
+          // Fija la profundidad actual del rostro para mantener el mismo tamaño mientras se sostiene
+          state.heldDepth = this.lastFaceDepth[this.currentFilter];
+          state.worn = false;
+          state.heldBy = handedness;
+        }
+      }
+    } else if (state.heldBy === handedness) {
+      // La misma mano que lo sostiene pellizca de nuevo: ponerlo de vuelta
+      state.worn = true;
+      state.heldBy = null;
     }
   }
 
@@ -481,6 +602,9 @@ export class Engine {
       this.renderer.autoClear = false;
       this.renderer.render(this.maskScene, this.maskCamera);
       this.renderer.autoClear = true;
+    } else if (this.currentFilter === 'holoscan') {
+      // Modo escaneo holográfico: el wireframe/puntos ya están en this.scene
+      this.renderer.render(this.scene, this.camera);
     } else if (this.glassSphere) {
       // Modo esfera de vidrio: renderiza con PostProcessing (Bloom aplicado)
       this.postProcessing.render();

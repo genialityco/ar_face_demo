@@ -3,6 +3,9 @@
  */
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
+// Distancia (en coordenadas normalizadas) entre pulgar e índice para considerar un gesto de pinza
+const PINCH_THRESHOLD = 0.06;
+
 export class HandTracker {
   constructor() {
     this.handLandmarker = null;
@@ -127,6 +130,47 @@ export class HandTracker {
       }
     }
     return null;
+  }
+
+  /**
+   * Indica si la mano está haciendo un gesto de pinza (pulgar e índice juntos)
+   * @param {number} handIndex Índice de la mano
+   */
+  isPinching(handIndex = 0) {
+    const landmarks = this.getLandmarks(handIndex);
+    if (!landmarks) return false;
+
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    const dx = thumbTip.x - indexTip.x;
+    const dy = thumbTip.y - indexTip.y;
+    const dz = thumbTip.z - indexTip.z;
+
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) < PINCH_THRESHOLD;
+  }
+
+  /**
+   * Indica si la mano izquierda está haciendo un gesto de pinza
+   */
+  isLeftPinching() {
+    for (let i = 0; i < this.getHandCount(); i++) {
+      if (this.getHandedness(i) === 'Left') {
+        return this.isPinching(i);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Indica si la mano derecha está haciendo un gesto de pinza
+   */
+  isRightPinching() {
+    for (let i = 0; i < this.getHandCount(); i++) {
+      if (this.getHandedness(i) === 'Right') {
+        return this.isPinching(i);
+      }
+    }
+    return false;
   }
 
   /**

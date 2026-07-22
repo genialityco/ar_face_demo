@@ -262,7 +262,7 @@ export class MetaballEffect {
     this.quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.quadScene = new THREE.Scene();
 
-    const geometry = new THREE.PlaneGeometry(2, 2);
+    const geometry = new THREE.PlaneGeometry(3, 3);
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.quadScene.add(this.mesh);
 

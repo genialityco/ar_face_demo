@@ -108,6 +108,19 @@ export class VikingHelmet {
   }
 
   /**
+   * Sujeta el casco en una posición fija (modo "en la mano"),
+   * dejando de seguir la matriz facial hasta que se llame a updateTransform() de nuevo
+   * @param {THREE.Vector3} worldPos
+   */
+  setHeldPosition(worldPos) {
+    if (!this.loaded) return;
+    this.anchor.matrixAutoUpdate = true;
+    this.anchor.visible = true;
+    this.anchor.position.copy(worldPos);
+    this.anchor.rotation.set(0, 0, 0);
+  }
+
+  /**
    * Aplica la matriz de transformación del rostro
    * @param {Float32Array|number[]|null} matrixData - facialTransformationMatrixes[0].data de MediaPipe (16 elementos)
    */
@@ -116,6 +129,9 @@ export class VikingHelmet {
       this.anchor.visible = false;
       return;
     }
+
+    // Puede venir de un cambio previo en modo "sujeto con la mano"
+    this.anchor.matrixAutoUpdate = false;
 
     this.anchor.visible = true;
     this.anchor.matrix.fromArray(matrixData);

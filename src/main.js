@@ -75,11 +75,18 @@ class App {
     const faceMatrix = this.faceTracker.getTransformMatrix();
     this.engine.updateFaceTransform(faceMatrix);
 
+    // Actualizar los landmarks del rostro (para el escaneo holográfico)
+    this.engine.updateFaceLandmarks(this.faceTracker.getLandmarks());
+
     // Actualizar posición de las manos (cada frame)
     const leftPalm = this.handTracker.getLeftPalm();
     const rightPalm = this.handTracker.getRightPalm();
     this.engine.updateLeftHandPosition(leftPalm);
     this.engine.updateRightHandPosition(rightPalm);
+
+    // Interacción de agarrar/soltar el accesorio facial con un gesto de pinza
+    this.engine.updateHandGrab('Left', leftPalm, this.handTracker.isLeftPinching(), nose);
+    this.engine.updateHandGrab('Right', rightPalm, this.handTracker.isRightPinching(), nose);
 
     // Actualizar y renderizar el engine
     this.engine.update();
