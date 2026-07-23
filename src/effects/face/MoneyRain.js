@@ -32,6 +32,13 @@ const POCKET_SPOTS = [
   { x: 0.78, y: 0.92 }
 ];
 
+// Margen de gracia (segundos) antes de soltar un billete si se pierde el
+// seguimiento de la mano momentáneamente (ej. al mover la mano muy rápido,
+// que suele causar motion blur y que MediaPipe pierda el tracking un instante).
+// Mientras esté dentro de este margen, el billete se queda "congelado" en su
+// última posición conocida en vez de soltarse.
+const HAND_LOST_GRACE = 0.6;
+
 // Índices de landmarks de la mano: muñeca, nudillo medio, puntas de índice/medio/anular
 const WRIST = 0;
 const MIDDLE_MCP = 9;
@@ -108,7 +115,8 @@ export class MoneyRain {
         heldBy: null,
         normX: Math.random(),
         normY: -Math.random() * 1.5, // arranca fuera de cuadro, escalonado (efecto lluvia)
-        spinPhase: Math.random() * Math.PI * 2
+        spinPhase: Math.random() * Math.PI * 2,
+        lostSince: null // momento (segundos) en que se perdió el tracking de la mano, o null
       });
     }
 
@@ -134,6 +142,7 @@ export class MoneyRain {
       b.heldBy = null;
       b.normX = Math.random();
       b.normY = -Math.random() * 1.5;
+      b.lostSince = null;
       b.mesh.visible = true;
       b.mesh.scale.setScalar(TARGET_SIZE / this.maxDim);
     }
@@ -204,11 +213,17 @@ export class MoneyRain {
       } else if (b.state === 'held') {
         const handLm = hands[b.heldBy]?.landmarks;
         if (!handLm) {
-          // Se perdió el seguimiento de la mano: sigue cayendo desde donde estaba
-          b.state = 'falling';
-          b.heldBy = null;
+          // Tracking perdido momentáneamente (ej. mano movida muy rápido): se
+          // queda "congelado" en su última posición hasta agotar el margen de gracia
+          if (b.lostSince === null) b.lostSince = time;
+          if (time - b.lostSince > HAND_LOST_GRACE) {
+            b.state = 'falling';
+            b.heldBy = null;
+            b.lostSince = null;
+          }
           continue;
         }
+        b.lostSince = null;
 
         const grip = gripPointOf(handLm);
         b.mesh.position.copy(projectFn(grip.x, grip.y, grip.z));

@@ -53,7 +53,7 @@ class App {
       });
       this.messageOverlay = new MessageOverlay();
       this.debugPanel = new DebugPanel({
-        onMoodToggle: (isHappy) => this.engine.setDebugMoodHappy(isHappy)
+        onToggle: (checked) => this.handleDebugToggle(checked)
       });
 
       // 6. Iniciar loop principal (cambiado a loop personalizado)
@@ -84,9 +84,16 @@ class App {
       this.messageOverlay.show(pendingMessage);
     }
 
-    // Panel de debug (ej. progreso de felicidad en el filtro de dinero)
+    // Panel de debug (ej. progreso de felicidad/peso, con switch para forzar el 100%)
     const debugText = this.engine.getDebugText();
     if (debugText) {
+      if (this.engine.currentFilter === 'money') {
+        this.debugPanel.setToggleLabel(' feliz (forzar)');
+      } else if (this.engine.currentFilter === 'hamburger') {
+        this.debugPanel.setToggleLabel(' 100% obeso (forzar)');
+      } else if (this.engine.currentFilter === 'gym') {
+        this.debugPanel.setToggleLabel(' esfuerzo máximo (forzar)');
+      }
       this.debugPanel.show(debugText);
     } else {
       this.debugPanel.hide();
@@ -135,10 +142,21 @@ class App {
     this.engine.updateHamburgerFeast(landmarks, blendshapes, hands);
     this.engine.updateFaceWarp(landmarks);
     this.engine.updateMoneyRain(landmarks, hands);
+    this.engine.updateWeightRack(landmarks, hands);
 
     // Actualizar y renderizar el engine
     this.engine.update();
     this.engine.render();
+  }
+
+  handleDebugToggle(checked) {
+    if (this.engine.currentFilter === 'money') {
+      this.engine.setDebugMoodHappy(checked);
+    } else if (this.engine.currentFilter === 'hamburger') {
+      this.engine.setDebugHamburgerMax(checked);
+    } else if (this.engine.currentFilter === 'gym') {
+      this.engine.setDebugGymMax(checked);
+    }
   }
 
   async handleFilterChange(filter) {

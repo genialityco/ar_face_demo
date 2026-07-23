@@ -37,7 +37,8 @@ export class Controls {
       { value: 'eyeglow', label: 'Fuego y Brillo en los Ojos' },
       //{ value: 'facewarp', label: 'Cara Inflada' },
       { value: 'hamburger', label: 'Comilona de Hamburguesas' },
-      { value: 'money', label: 'Lluvia de Plata' }
+      { value: 'money', label: 'Lluvia de Plata' },
+      { value: 'gym', label: 'Levantamiento de Pesas' }
     ];
 
     for (const opt of options) {

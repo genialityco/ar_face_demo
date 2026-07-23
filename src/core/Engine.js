@@ -15,6 +15,8 @@ import { FaceWarp } from '../effects/face/FaceWarp.js';
 import { HamburgerFeast } from '../effects/face/HamburgerFeast.js';
 import { MoneyRain } from '../effects/face/MoneyRain.js';
 import { MoodWarp } from '../effects/face/MoodWarp.js';
+import { WeightRack } from '../effects/face/WeightRack.js';
+import { EffortFace } from '../effects/face/EffortFace.js';
 
 // FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
 const FACE_MATRIX_FOV = 63;
@@ -57,7 +59,7 @@ export class Engine {
     // Efecto de metaballs
     this.metaballEffect = null;
 
-    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money')
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money' | 'gym')
     this.currentFilter = 'metaball';
 
     // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
@@ -85,6 +87,15 @@ export class Engine {
     this.moodWarp = null;
     // Switch de debug: fuerza la expresión feliz, ignorando el progreso real
     this.debugMoodHappy = false;
+    // Switch de debug: fuerza el filtro de hamburguesas al 100% (obesidad máxima)
+    this.debugHamburgerMax = false;
+
+    // Mancuernas agarrables en el suelo (de menor a mayor peso): al levantarlas
+    // muestran esfuerzo (enrojecimiento + gesto) en el rostro, según el peso
+    this.weightRack = null;
+    this.effortFace = null;
+    // Switch de debug: fuerza el esfuerzo al máximo, ignorando el levantamiento real
+    this.debugGymMax = false;
 
     // Estado de "puesto" / "sujeto con la mano" para los accesorios que se pueden agarrar
     this.wearState = {
@@ -181,6 +192,14 @@ export class Engine {
     // Configurar la deformación de expresión (triste a feliz)
     this.moodWarp = new MoodWarp();
     this.moodWarp.setBackgroundTexture(this.videoTexture);
+
+    // Configurar las mancuernas agarrables
+    this.weightRack = new WeightRack();
+    this.weightRack.addToScene(this.scene);
+
+    // Configurar el efecto de esfuerzo (enrojecimiento + gesto)
+    this.effortFace = new EffortFace();
+    this.effortFace.setBackgroundTexture(this.videoTexture);
 
     // Configurar el post-procesado
     this.setupPostProcessing();
@@ -300,6 +319,8 @@ export class Engine {
       await this.hamburgerFeast.load();
     } else if (filter === 'money') {
       await this.moneyRain.load();
+    } else if (filter === 'gym') {
+      await this.weightRack.load();
     }
 
     this.currentFilter = filter;
@@ -310,17 +331,23 @@ export class Engine {
     this.eyeGlow.setVisible(filter === 'eyeglow');
     this.hamburgerFeast.setVisible(filter === 'hamburger');
     this.moneyRain.setVisible(filter === 'money');
+    this.weightRack.setVisible(filter === 'gym');
     const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower';
     this.headOccluder.setVisible(isFaceAsset);
 
     if (filter === 'hamburger') {
-      // Siempre empieza sin ningún efecto aplicado
+      // Siempre empieza sin ningún efecto aplicado y con el switch de debug apagado
       this.hamburgerFeast.reset();
       this.faceWarp.bulgeAmount = 0;
+      this.debugHamburgerMax = false;
     } else if (filter === 'money') {
       // Siempre empieza triste (sin billetes guardados) y con el switch de debug apagado
       this.moneyRain.reset();
       this.debugMoodHappy = false;
+    } else if (filter === 'gym') {
+      // Siempre empieza sin esfuerzo y con el switch de debug apagado
+      this.weightRack.reset();
+      this.debugGymMax = false;
     }
   }
 
@@ -593,7 +620,18 @@ export class Engine {
       time: performance.now() * 0.001
     });
 
-    this.faceWarp.bulgeAmount = this.hamburgerFeast.getProgress() * HAMBURGER_MAX_BULGE;
+    // El switch de debug fuerza el 100% (obesidad máxima) ignorando el progreso real
+    this.faceWarp.bulgeAmount = this.debugHamburgerMax
+      ? HAMBURGER_MAX_BULGE
+      : this.hamburgerFeast.getProgress() * HAMBURGER_MAX_BULGE;
+  }
+
+  /**
+   * Activa/desactiva el switch de debug que fuerza el filtro de hamburguesas al 100%
+   * @param {boolean} isMax
+   */
+  setDebugHamburgerMax(isMax) {
+    this.debugHamburgerMax = isMax;
   }
 
   /**
@@ -626,11 +664,45 @@ export class Engine {
   }
 
   /**
+   * Actualiza las mancuernas agarrables y, según cuánto se esté levantando,
+   * el enrojecimiento/gesto de esfuerzo en el rostro (EffortFace)
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   * @param {{Left:{landmarks:Array|null,isPincerGrab:boolean}, Right:{landmarks:Array|null,isPincerGrab:boolean}}} hands
+   */
+  updateWeightRack(landmarks, hands) {
+    if (this.currentFilter !== 'gym' || !this.weightRack) return;
+
+    this.weightRack.update({
+      hands,
+      projectFn: (x, y, z) => this.projectToWorld(x, y, z),
+      time: performance.now() * 0.001
+    });
+
+    // El switch de debug fuerza el esfuerzo máximo ignorando el levantamiento real
+    this.effortFace.intensity = this.debugGymMax ? 1 : this.weightRack.getEffort();
+    this.effortFace.update(landmarks);
+  }
+
+  /**
+   * Activa/desactiva el switch de debug que fuerza el esfuerzo al máximo
+   * @param {boolean} isMax
+   */
+  setDebugGymMax(isMax) {
+    this.debugGymMax = isMax;
+  }
+
+  /**
    * Texto de debug para el filtro actual (ej. progreso de felicidad), o null si no aplica
    */
   getDebugText() {
     if (this.currentFilter === 'money' && this.moneyRain) {
       return `Felicidad: ${Math.round(this.moneyRain.getProgress() * 100)}%`;
+    }
+    if (this.currentFilter === 'hamburger' && this.hamburgerFeast) {
+      return `Peso: ${Math.round(this.hamburgerFeast.getProgress() * 100)}%`;
+    }
+    if (this.currentFilter === 'gym' && this.weightRack) {
+      return `Esfuerzo: ${Math.round(this.weightRack.getEffort() * 100)}%`;
     }
     return null;
   }
@@ -767,6 +839,14 @@ export class Engine {
       // Modo lluvia de billetes: fondo con boca/cejas deformadas + billetes superpuestos
       this.scene.background = null;
       this.moodWarp.render(this.renderer);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = true;
+      this.scene.background = this.videoTexture;
+    } else if (this.currentFilter === 'gym') {
+      // Modo levantamiento de pesas: fondo con esfuerzo/enrojecimiento + mancuernas superpuestas
+      this.scene.background = null;
+      this.effortFace.render(this.renderer);
       this.renderer.autoClear = false;
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = true;
