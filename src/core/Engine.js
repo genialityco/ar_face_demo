@@ -9,6 +9,7 @@ import { VendettaMask } from '../effects/face/VendettaMask.js';
 import { VikingHelmet } from '../effects/face/VikingHelmet.js';
 import { HeadOccluder } from '../effects/face/HeadOccluder.js';
 import { FlowerFace } from '../effects/face/FlowerFace.js';
+import { RaccoonFace } from '../effects/face/RaccoonFace.js';
 import { HoloScan } from '../effects/face/HoloScan.js';
 import { EyeGlow } from '../effects/face/EyeGlow.js';
 import { FaceWarp } from '../effects/face/FaceWarp.js';
@@ -60,13 +61,14 @@ export class Engine {
     // Efecto de metaballs
     this.metaballEffect = null;
 
-    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money' | 'gym' | 'aging')
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'raccoon' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money' | 'gym' | 'aging')
     this.currentFilter = 'metaball';
 
-    // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
+    // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores, mapache)
     this.vendettaMask = null;
     this.vikingHelmet = null;
     this.flowerFace = null;
+    this.raccoonFace = null;
     this.headOccluder = null;
     this.maskScene = null;
     this.maskCamera = null;
@@ -292,6 +294,17 @@ export class Engine {
     this.maskCamera = new THREE.PerspectiveCamera(FACE_MATRIX_FOV, aspect, 0.01, 5000);
     this.maskCamera.position.set(0, 0, 0);
 
+    // Luces propias del maskScene: es una escena separada de this.scene, así
+    // que las luces de setupLights() no la afectan. VendettaMask usa un matcap
+    // (se ilumina solo) y VikingHelmet usa el cubemap como envMap, pero
+    // FlowerFace/RaccoonFace usan MeshStandardMaterial normal y sin esto se
+    // ven negros (sin luces ni envMap, no hay nada que iluminarlos)
+    const maskAmbient = new THREE.AmbientLight(0xffffff, 0.7);
+    this.maskScene.add(maskAmbient);
+    const maskDirectional = new THREE.DirectionalLight(0xffffff, 1.0);
+    maskDirectional.position.set(0, 1, 1);
+    this.maskScene.add(maskDirectional);
+
     // El oclusor de profundidad se agrega primero (con renderOrder escribe su profundidad antes que el resto)
     this.headOccluder = new HeadOccluder();
     this.headOccluder.addToScene(this.maskScene);
@@ -304,6 +317,9 @@ export class Engine {
 
     this.flowerFace = new FlowerFace();
     this.flowerFace.addToScene(this.maskScene);
+
+    this.raccoonFace = new RaccoonFace();
+    this.raccoonFace.addToScene(this.maskScene);
   }
 
   /**
@@ -325,6 +341,8 @@ export class Engine {
       await this.vikingHelmet.load(this.cubeRenderTarget.texture);
     } else if (filter === 'flower') {
       await this.flowerFace.load();
+    } else if (filter === 'raccoon') {
+      await this.raccoonFace.load();
     } else if (filter === 'hamburger') {
       await this.hamburgerFeast.load();
     } else if (filter === 'money') {
@@ -337,12 +355,13 @@ export class Engine {
     this.vendettaMask.setVisible(filter === 'vendetta');
     this.vikingHelmet.setVisible(filter === 'viking');
     this.flowerFace.setVisible(filter === 'flower');
+    this.raccoonFace.setVisible(filter === 'raccoon');
     this.holoScan.setVisible(filter === 'holoscan');
     this.eyeGlow.setVisible(filter === 'eyeglow');
     this.hamburgerFeast.setVisible(filter === 'hamburger');
     this.moneyRain.setVisible(filter === 'money');
     this.weightRack.setVisible(filter === 'gym');
-    const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower';
+    const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower' || filter === 'raccoon';
     this.headOccluder.setVisible(isFaceAsset);
 
     if (filter === 'hamburger') {
@@ -585,7 +604,20 @@ export class Engine {
     } else if (this.currentFilter === 'flower' && this.flowerFace) {
       this.flowerFace.updateTransform(matrixData);
       this.headOccluder.updateTransform(matrixData);
+    } else if (this.currentFilter === 'raccoon' && this.raccoonFace) {
+      this.raccoonFace.updateTransform(matrixData);
+      this.headOccluder.updateTransform(matrixData);
     }
+  }
+
+  /**
+   * Aplica las expresiones (blendshapes) reales del rostro a los morph
+   * targets del mapache (parpadeo, sonrisa, boca abierta, cejas, etc.)
+   * @param {Object|null} blendshapes
+   */
+  updateRaccoonExpression(blendshapes) {
+    if (this.currentFilter !== 'raccoon' || !this.raccoonFace) return;
+    this.raccoonFace.updateBlendshapes(blendshapes);
   }
 
   /**
@@ -853,7 +885,7 @@ export class Engine {
       // Modo metaball: renderiza el fondo y luego superpone el metaball
       this.renderer.render(this.scene, this.camera);
       this.metaballEffect.render(this.renderer);
-    } else if (this.currentFilter === 'vendetta' || this.currentFilter === 'viking' || this.currentFilter === 'flower') {
+    } else if (this.currentFilter === 'vendetta' || this.currentFilter === 'viking' || this.currentFilter === 'flower' || this.currentFilter === 'raccoon') {
       // Modo asset 3D que sigue al rostro: renderiza el fondo y luego superpone el asset
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = false;

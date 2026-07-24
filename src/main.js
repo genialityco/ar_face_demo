@@ -114,6 +114,7 @@ class App {
     const blendshapes = this.faceTracker.getBlendshapes();
     this.engine.updateFaceLandmarks(landmarks);
     this.engine.updateFaceExpression(landmarks, blendshapes);
+    this.engine.updateRaccoonExpression(blendshapes);
 
     // Actualizar posición de las manos (cada frame)
     const leftPalm = this.handTracker.getLeftPalm();

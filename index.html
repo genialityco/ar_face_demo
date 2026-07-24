@@ -38,6 +38,14 @@
         max-height: 80vh;
         border-radius: 12px;
       }
+      #brand-logo {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        height: 36px;
+        width: auto;
+        z-index: 10;
+      }
       #filter-controls {
         position: fixed;
         top: 16px;
@@ -51,6 +59,23 @@
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 8px;
         backdrop-filter: blur(6px);
+        z-index: 10;
+      }
+      #filter-description {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: min(480px, 80vw);
+        padding: 6px 14px;
+        background: rgba(20, 20, 20, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        backdrop-filter: blur(6px);
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 12px;
+        line-height: 1.4;
+        text-align: center;
         z-index: 10;
       }
       #filter-controls label {
@@ -122,6 +147,7 @@
     </style>
   </head>
   <body>
+    <img id="brand-logo" src="/LOGOS_GEN.iality_web-02.svg" alt="Logo" />
     <div id="app">
       <div id="container"></div>
     </div>
