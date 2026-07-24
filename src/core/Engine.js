@@ -17,6 +17,7 @@ import { MoneyRain } from '../effects/face/MoneyRain.js';
 import { MoodWarp } from '../effects/face/MoodWarp.js';
 import { WeightRack } from '../effects/face/WeightRack.js';
 import { EffortFace } from '../effects/face/EffortFace.js';
+import { AgingFace } from '../effects/face/AgingFace.js';
 
 // FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
 const FACE_MATRIX_FOV = 63;
@@ -59,7 +60,7 @@ export class Engine {
     // Efecto de metaballs
     this.metaballEffect = null;
 
-    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money' | 'gym')
+    // Filtro seleccionado ('metaball' | 'vendetta' | 'viking' | 'flower' | 'holoscan' | 'eyeglow' | 'facewarp' | 'hamburger' | 'money' | 'gym' | 'aging')
     this.currentFilter = 'metaball';
 
     // Assets 3D que siguen al rostro (máscara Vendetta, casco vikingo, cara de flores)
@@ -96,6 +97,11 @@ export class Engine {
     this.effortFace = null;
     // Switch de debug: fuerza el esfuerzo al máximo, ignorando el levantamiento real
     this.debugGymMax = false;
+
+    // Envejecimiento del rostro (todavía sin mecánica/historia asociada)
+    this.agingFace = null;
+    // Switch de debug: alterna entre sin envejecer (0) y envejecimiento máximo (1)
+    this.debugAgingMax = false;
 
     // Estado de "puesto" / "sujeto con la mano" para los accesorios que se pueden agarrar
     this.wearState = {
@@ -200,6 +206,10 @@ export class Engine {
     // Configurar el efecto de esfuerzo (enrojecimiento + gesto)
     this.effortFace = new EffortFace();
     this.effortFace.setBackgroundTexture(this.videoTexture);
+
+    // Configurar el efecto de envejecimiento
+    this.agingFace = new AgingFace();
+    this.agingFace.setBackgroundTexture(this.videoTexture);
 
     // Configurar el post-procesado
     this.setupPostProcessing();
@@ -348,6 +358,10 @@ export class Engine {
       // Siempre empieza sin esfuerzo y con el switch de debug apagado
       this.weightRack.reset();
       this.debugGymMax = false;
+    } else if (filter === 'aging') {
+      // Siempre empieza sin envejecer y con el switch de debug apagado
+      this.agingFace.intensity = 0;
+      this.debugAgingMax = false;
     }
   }
 
@@ -692,6 +706,27 @@ export class Engine {
   }
 
   /**
+   * Actualiza el efecto de envejecimiento. Todavía no tiene una mecánica que
+   * controle el progreso, así que el switch de debug alterna entre sin
+   * envejecer (0) y envejecimiento máximo (1) mientras se define la historia
+   * @param {Array<{x:number,y:number,z:number}>|null} landmarks
+   */
+  updateAgingFace(landmarks) {
+    if (this.currentFilter !== 'aging' || !this.agingFace) return;
+
+    this.agingFace.intensity = this.debugAgingMax ? 1 : 0;
+    this.agingFace.update(landmarks);
+  }
+
+  /**
+   * Activa/desactiva el switch de debug que fuerza el envejecimiento al máximo
+   * @param {boolean} isMax
+   */
+  setDebugAgingMax(isMax) {
+    this.debugAgingMax = isMax;
+  }
+
+  /**
    * Texto de debug para el filtro actual (ej. progreso de felicidad), o null si no aplica
    */
   getDebugText() {
@@ -703,6 +738,9 @@ export class Engine {
     }
     if (this.currentFilter === 'gym' && this.weightRack) {
       return `Esfuerzo: ${Math.round(this.weightRack.getEffort() * 100)}%`;
+    }
+    if (this.currentFilter === 'aging' && this.agingFace) {
+      return `Edad: ${Math.round(this.agingFace.intensity * 100)}%`;
     }
     return null;
   }
@@ -851,6 +889,9 @@ export class Engine {
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = true;
       this.scene.background = this.videoTexture;
+    } else if (this.currentFilter === 'aging') {
+      // Modo envejecimiento: reemplaza el fondo por el video envejecido (sin overlay, todavía sin mecánica)
+      this.agingFace.render(this.renderer);
     } else if (this.glassSphere) {
       // Modo esfera de vidrio: renderiza con PostProcessing (Bloom aplicado)
       this.postProcessing.render();

@@ -93,6 +93,8 @@ class App {
         this.debugPanel.setToggleLabel(' 100% obeso (forzar)');
       } else if (this.engine.currentFilter === 'gym') {
         this.debugPanel.setToggleLabel(' esfuerzo máximo (forzar)');
+      } else if (this.engine.currentFilter === 'aging') {
+        this.debugPanel.setToggleLabel(' envejecimiento máximo (forzar)');
       }
       this.debugPanel.show(debugText);
     } else {
@@ -143,6 +145,7 @@ class App {
     this.engine.updateFaceWarp(landmarks);
     this.engine.updateMoneyRain(landmarks, hands);
     this.engine.updateWeightRack(landmarks, hands);
+    this.engine.updateAgingFace(landmarks);
 
     // Actualizar y renderizar el engine
     this.engine.update();
@@ -156,6 +159,8 @@ class App {
       this.engine.setDebugHamburgerMax(checked);
     } else if (this.engine.currentFilter === 'gym') {
       this.engine.setDebugGymMax(checked);
+    } else if (this.engine.currentFilter === 'aging') {
+      this.engine.setDebugAgingMax(checked);
     }
   }
 

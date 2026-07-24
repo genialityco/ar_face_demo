@@ -38,10 +38,13 @@ const BURGER_TO_PALM_RATIO = 1.3;
 const GRAB_PROXIMITY = 0.14;
 // Distancia normalizada para considerar que la mano llevó la hamburguesa a la boca
 const MOUTH_PROXIMITY = 0.09;
-// Umbral del blendshape jawOpen para contar como "boca abierta" (masticando)
-const JAW_OPEN_THRESHOLD = 0.35;
-// Cantidad de ciclos abrir/cerrar la boca antes de que la hamburguesa desaparezca
-const CHEWS_REQUIRED = 3;
+// Umbral del blendshape jawOpen para contar como "boca abierta" (masticando).
+// Bajado para que un movimiento de boca más chico ya cuente
+const JAW_OPEN_THRESHOLD = 0.25;
+// Cantidad de ciclos abrir/cerrar la boca antes de que la hamburguesa
+// desaparezca. Bajado a 1 (un solo "mordisco") para que comer sea más simple
+// y no haga falta masticar varias veces
+const CHEWS_REQUIRED = 1;
 // Sentadillas necesarias para bajar un grado el efecto, una vez comidas todas las hamburguesas
 const SQUATS_PER_STEP = 3;
 

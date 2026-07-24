@@ -38,7 +38,8 @@ export class Controls {
       //{ value: 'facewarp', label: 'Cara Inflada' },
       { value: 'hamburger', label: 'Comilona de Hamburguesas' },
       { value: 'money', label: 'Lluvia de Plata' },
-      { value: 'gym', label: 'Levantamiento de Pesas' }
+      { value: 'gym', label: 'Levantamiento de Pesas' },
+      { value: 'aging', label: 'Envejecimiento' }
     ];
 
     for (const opt of options) {
