@@ -93,6 +93,46 @@
       #filter-controls select:disabled {
         opacity: 0.5;
       }
+      #filter-controls button {
+        background: #1a1a1a;
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        padding: 4px 9px;
+        font-size: 15px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      #filter-controls #mirror-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 14px;
+        opacity: 0.85;
+        cursor: pointer;
+        user-select: none;
+      }
+      /* Espejo global de la cámara (invierte todo lo que dibuja el renderer) */
+      #container.mirrored canvas {
+        transform: scaleX(-1);
+      }
+      #filter-controls button:hover {
+        background: #2a2a2a;
+      }
+      /* En pantalla completa la cámara ocupa todo el viewport (la UI queda encima) */
+      :fullscreen #container,
+      :-webkit-full-screen #container {
+        width: 100vw;
+        height: 100vh;
+      }
+      :fullscreen canvas,
+      :-webkit-full-screen canvas {
+        width: 100%;
+        height: 100%;
+        max-height: none;
+        object-fit: contain;
+        border-radius: 0;
+      }
       #filter-status {
         font-size: 12px;
         opacity: 0.7;

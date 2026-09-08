@@ -33,6 +33,11 @@ export class Controls {
     document.body.appendChild(this.element);
     document.body.appendChild(this.descriptionElement);
     this._updateDescription(this.select.value);
+
+    this._onFsChange = () => this._syncFullscreenBtn();
+    document.addEventListener('fullscreenchange', this._onFsChange);
+    document.addEventListener('webkitfullscreenchange', this._onFsChange);
+    this._syncFullscreenBtn();
   }
 
   _createElement() {
@@ -99,17 +104,81 @@ export class Controls {
       this.onSizeChange?.(Number(e.target.value));
     });
 
+    const mirrorLabel = document.createElement('label');
+    mirrorLabel.id = 'mirror-label';
+    mirrorLabel.title = 'Invertir la cámara (espejo)';
+    const mirrorInput = document.createElement('input');
+    mirrorInput.type = 'checkbox';
+    mirrorInput.id = 'mirror-toggle';
+    mirrorLabel.appendChild(mirrorInput);
+    mirrorLabel.appendChild(document.createTextNode('Espejo'));
+
+    const savedMirror = this._readMirrorPref();
+    mirrorInput.checked = savedMirror;
+    this._applyMirror(savedMirror);
+    mirrorInput.addEventListener('change', (e) => {
+      const on = e.target.checked;
+      this._applyMirror(on);
+      try {
+        localStorage.setItem('mirror', on ? '1' : '0');
+      } catch (_) {
+        /* almacenamiento no disponible */
+      }
+    });
+
+    const fullscreenBtn = document.createElement('button');
+    fullscreenBtn.id = 'fullscreen-btn';
+    fullscreenBtn.type = 'button';
+    fullscreenBtn.textContent = '⛶';
+    fullscreenBtn.title = 'Pantalla completa';
+    fullscreenBtn.addEventListener('click', () => this._toggleFullscreen());
+
     wrapper.appendChild(label);
     wrapper.appendChild(select);
     wrapper.appendChild(status);
     wrapper.appendChild(sizeLabel);
     wrapper.appendChild(sizeSelect);
+    wrapper.appendChild(mirrorLabel);
+    wrapper.appendChild(fullscreenBtn);
 
     this.select = select;
     this.status = status;
     this.sizeSelect = sizeSelect;
+    this.mirrorInput = mirrorInput;
+    this.fullscreenBtn = fullscreenBtn;
 
     return wrapper;
+  }
+
+  _readMirrorPref() {
+    try {
+      return localStorage.getItem('mirror') === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _applyMirror(on) {
+    const container = document.getElementById('container');
+    if (container) container.classList.toggle('mirrored', on);
+  }
+
+  _toggleFullscreen() {
+    const doc = document;
+    const active = doc.fullscreenElement || doc.webkitFullscreenElement;
+    if (!active) {
+      const el = doc.documentElement;
+      (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {});
+    } else {
+      (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc);
+    }
+  }
+
+  _syncFullscreenBtn() {
+    if (!this.fullscreenBtn) return;
+    const active = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    this.fullscreenBtn.textContent = active ? '🗗' : '⛶';
+    this.fullscreenBtn.title = active ? 'Salir de pantalla completa' : 'Pantalla completa';
   }
 
   _updateDescription(filter) {
