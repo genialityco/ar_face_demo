@@ -147,6 +147,8 @@ class App {
     this.engine.updateMoneyRain(landmarks, hands);
     this.engine.updateWeightRack(landmarks, hands);
     this.engine.updateAgingFace(landmarks);
+    this.engine.updateCubeMover(hands);
+    this.engine.updateHandSkeleton(hands);
 
     // Actualizar y renderizar el engine
     this.engine.update();

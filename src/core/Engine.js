@@ -19,6 +19,9 @@ import { MoodWarp } from '../effects/face/MoodWarp.js';
 import { WeightRack } from '../effects/face/WeightRack.js';
 import { EffortFace } from '../effects/face/EffortFace.js';
 import { AgingFace } from '../effects/face/AgingFace.js';
+import { CubeMover } from '../effects/hand/CubeMover.js';
+import { HandSkeleton } from '../effects/hand/HandSkeleton.js';
+import { HandOccluder } from '../effects/hand/HandOccluder.js';
 
 // FOV vertical de la cámara virtual que asume el facialTransformationMatrix de MediaPipe
 const FACE_MATRIX_FOV = 63;
@@ -31,6 +34,9 @@ const GRAB_PROXIMITY_THRESHOLD = 0.35;
 
 // Cuánto se infla la cara (bulgeAmount de FaceWarp) cuando se comieron todas las hamburguesas
 const HAMBURGER_MAX_BULGE = 0.14;
+
+// Filtros que usan las manos: en todos se dibuja el esqueleto de huesos
+const HAND_FILTERS = new Set(['metaball', 'vendetta', 'viking', 'hamburger', 'money', 'gym', 'cubes']);
 
 export class Engine {
   constructor(container) {
@@ -99,6 +105,18 @@ export class Engine {
     this.effortFace = null;
     // Switch de debug: fuerza el esfuerzo al máximo, ignorando el levantamiento real
     this.debugGymMax = false;
+
+    // Esqueleto de huesos de las manos, compartido por todas las experiencias
+    // que usan las manos (metaball, vendetta, viking, hamburger, money, gym, cubes)
+    this.handSkeleton = null;
+
+    // Experiencia de manos: cubos de Rubik colocados en la escena real (sobre el
+    // video), agarrables con la mano
+    this.cubeMover = null;
+
+    // Oclusor invisible con forma de mano: hace que los cubos se ocluyan de
+    // verdad (la mano puede pasar por delante/detrás de un cubo)
+    this.handOccluder = null;
 
     // Envejecimiento del rostro (todavía sin mecánica/historia asociada)
     this.agingFace = null;
@@ -212,6 +230,18 @@ export class Engine {
     // Configurar el efecto de envejecimiento
     this.agingFace = new AgingFace();
     this.agingFace.setBackgroundTexture(this.videoTexture);
+
+    // Configurar la experiencia de mover cubos con las manos
+    this.cubeMover = new CubeMover();
+    this.cubeMover.addToScene(this.scene);
+
+    // Configurar el esqueleto de huesos de las manos (compartido)
+    this.handSkeleton = new HandSkeleton();
+    this.handSkeleton.addToScene(this.scene);
+
+    // Configurar el oclusor de manos (para el modo cubos)
+    this.handOccluder = new HandOccluder();
+    this.handOccluder.addToScene(this.scene);
 
     // Configurar el post-procesado
     this.setupPostProcessing();
@@ -349,6 +379,8 @@ export class Engine {
       await this.moneyRain.load();
     } else if (filter === 'gym') {
       await this.weightRack.load();
+    } else if (filter === 'cubes') {
+      await this.cubeMover.load(this.cubeRenderTarget.texture);
     }
 
     this.currentFilter = filter;
@@ -361,6 +393,9 @@ export class Engine {
     this.hamburgerFeast.setVisible(filter === 'hamburger');
     this.moneyRain.setVisible(filter === 'money');
     this.weightRack.setVisible(filter === 'gym');
+    this.cubeMover.setVisible(filter === 'cubes');
+    this.handOccluder.setVisible(filter === 'cubes');
+    this.handSkeleton.setVisible(HAND_FILTERS.has(filter));
     const isFaceAsset = filter === 'vendetta' || filter === 'viking' || filter === 'flower' || filter === 'raccoon';
     this.headOccluder.setVisible(isFaceAsset);
 
@@ -381,6 +416,9 @@ export class Engine {
       // Siempre empieza sin envejecer y con el switch de debug apagado
       this.agingFace.intensity = 0;
       this.debugAgingMax = false;
+    } else if (filter === 'cubes') {
+      // Siempre empieza con todos los cubos en su plataforma de origen
+      this.cubeMover.reset();
     }
   }
 
@@ -759,6 +797,39 @@ export class Engine {
   }
 
   /**
+   * Actualiza la experiencia de cubos AR: agarrar/soltar los cubos de Rubik que
+   * están apoyados en el piso del entorno 3D.
+   * @param {{Left:{landmarks:Array|null,isPincerGrab:boolean}, Right:{landmarks:Array|null,isPincerGrab:boolean}}} hands
+   */
+  updateCubeMover(hands) {
+    if (this.currentFilter !== 'cubes' || !this.cubeMover) return;
+
+    const projectFn = (x, y, z) => this.projectToWorld(x, y, z);
+    this.cubeMover.update({
+      hands,
+      projectFn,
+      camera: this.camera,
+      time: performance.now() * 0.001
+    });
+    // Oclusor de manos: debe actualizarse junto con los cubos para que la
+    // profundidad de la mano esté al día cuando se dibuja la escena
+    this.handOccluder.update({ hands, projectFn });
+  }
+
+  /**
+   * Actualiza el esqueleto de huesos de las manos (sólo hace algo si el filtro
+   * activo usa las manos; en el resto el grupo está oculto y update() sale antes)
+   * @param {{Left:{landmarks:Array|null}, Right:{landmarks:Array|null}}} hands
+   */
+  updateHandSkeleton(hands) {
+    if (!this.handSkeleton) return;
+    this.handSkeleton.update({
+      hands,
+      projectFn: (x, y, z) => this.projectToWorld(x, y, z)
+    });
+  }
+
+  /**
    * Texto de debug para el filtro actual (ej. progreso de felicidad), o null si no aplica
    */
   getDebugText() {
@@ -781,8 +852,10 @@ export class Engine {
    * Devuelve y limpia el mensaje flotante pendiente (ej. "¡Bajaste de peso!"), o null
    */
   consumePendingMessage() {
-    if (this.currentFilter !== 'hamburger' || !this.hamburgerFeast) return null;
-    return this.hamburgerFeast.consumePendingMessage();
+    if (this.currentFilter === 'hamburger' && this.hamburgerFeast) {
+      return this.hamburgerFeast.consumePendingMessage();
+    }
+    return null;
   }
 
   /**
@@ -891,8 +964,9 @@ export class Engine {
       this.renderer.autoClear = false;
       this.renderer.render(this.maskScene, this.maskCamera);
       this.renderer.autoClear = true;
-    } else if (this.currentFilter === 'holoscan' || this.currentFilter === 'eyeglow') {
-      // Modo escaneo holográfico / fuego-destellos en los ojos: ya están en this.scene
+    } else if (this.currentFilter === 'holoscan' || this.currentFilter === 'eyeglow' || this.currentFilter === 'cubes') {
+      // Modo escaneo holográfico / fuego-destellos en los ojos / cubos AR:
+      // todo vive en this.scene sobre el video real (fondo = videoTexture)
       this.renderer.render(this.scene, this.camera);
     } else if (this.currentFilter === 'facewarp') {
       // Modo cara deformada: reemplaza el fondo por el video deformado (sin overlay)

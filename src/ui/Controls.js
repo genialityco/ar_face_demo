@@ -21,7 +21,8 @@ const FILTER_DESCRIPTIONS = {
   hamburger: 'Agarrá las hamburguesas flotantes con la mano (pinza con todos los dedos), llevalas a la boca y "comé" para ir infando tu cara. Una vez comidas todas, hacé sentadillas para volver a tu peso ideal.',
   money: 'Atrapá los billetes que caen con la mano y guardalos en tus bolsillos. A medida que guardás más, tu expresión pasa de triste a feliz.',
   gym: 'Levantá con la mano alguna de las 4 mancuernas del suelo (de menor a mayor peso): cuanto más pesada y más alto la levantes, más esfuerzo y enrojecimiento se nota en tu cara.',
-  aging: 'Envejece tu rostro en vivo (arrugas, piel caída, tono de piel). Todavía sin mecánica de juego: se activa con el switch del panel de debug.'
+  aging: 'Envejece tu rostro en vivo (arrugas, piel caída, tono de piel). Todavía sin mecánica de juego: se activa con el switch del panel de debug.',
+  cubes: 'Modo AR: 3 cubos de Rubik 3D colocados sobre el video real, como si fueran parte del entorno (quietos, con sombra de contacto y oclusión: la mano puede pasar por delante y por detrás de un cubo). Tus manos se dibujan como un esqueleto de huesos: cerrá la mano en pinza (dedos juntos contra el pulgar) sobre un cubo para agarrarlo, movelo, y al soltarlo cae y se queda donde quedó.'
 };
 
 export class Controls {
@@ -57,7 +58,8 @@ export class Controls {
       { value: 'hamburger', label: 'Comilona de Hamburguesas' },
       { value: 'money', label: 'Lluvia de Plata' },
       { value: 'gym', label: 'Levantamiento de Pesas' },
-      { value: 'aging', label: 'Envejecimiento' }
+      { value: 'aging', label: 'Envejecimiento' },
+      { value: 'cubes', label: 'Mover Cubos' }
     ];
 
     for (const opt of options) {
