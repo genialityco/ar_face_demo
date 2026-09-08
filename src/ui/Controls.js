@@ -38,6 +38,10 @@ export class Controls {
     document.addEventListener('fullscreenchange', this._onFsChange);
     document.addEventListener('webkitfullscreenchange', this._onFsChange);
     this._syncFullscreenBtn();
+
+    // Pantalla completa por defecto: el navegador exige un gesto del usuario,
+    // así que se dispara en la primera interacción (click/tecla).
+    this._armAutoFullscreen();
   }
 
   _createElement() {
@@ -151,10 +155,12 @@ export class Controls {
   }
 
   _readMirrorPref() {
+    // Espejo activado por defecto; sólo se desactiva si el usuario lo guardó así
     try {
-      return localStorage.getItem('mirror') === '1';
+      const v = localStorage.getItem('mirror');
+      return v === null ? true : v === '1';
     } catch (_) {
-      return false;
+      return true;
     }
   }
 
@@ -163,12 +169,33 @@ export class Controls {
     if (container) container.classList.toggle('mirrored', on);
   }
 
+  _enterFullscreen() {
+    const el = document.documentElement;
+    try {
+      const p = (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+      p?.catch?.(() => {});
+    } catch (_) {
+      /* bloqueado sin gesto de usuario */
+    }
+  }
+
+  _armAutoFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) return;
+    const go = () => {
+      document.removeEventListener('pointerdown', go, true);
+      document.removeEventListener('keydown', go, true);
+      this._enterFullscreen();
+    };
+    document.addEventListener('pointerdown', go, true);
+    document.addEventListener('keydown', go, true);
+    this._enterFullscreen(); // intento inmediato (kiosco / contextos que lo permiten)
+  }
+
   _toggleFullscreen() {
     const doc = document;
     const active = doc.fullscreenElement || doc.webkitFullscreenElement;
     if (!active) {
-      const el = doc.documentElement;
-      (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {});
+      this._enterFullscreen();
     } else {
       (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc);
     }
