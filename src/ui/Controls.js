@@ -153,6 +153,29 @@ export class Controls {
       }
     });
 
+    // Mostrar/ocultar el texto de descripción del filtro (oculto por defecto)
+    const descLabel = document.createElement('label');
+    descLabel.id = 'desc-label';
+    descLabel.title = 'Mostrar la descripción del filtro';
+    const descInput = document.createElement('input');
+    descInput.type = 'checkbox';
+    descInput.id = 'desc-toggle';
+    descLabel.appendChild(descInput);
+    descLabel.appendChild(document.createTextNode('Info'));
+
+    const savedDesc = this._readDescPref();
+    descInput.checked = savedDesc;
+    this._applyDescVisible(savedDesc);
+    descInput.addEventListener('change', (e) => {
+      const on = e.target.checked;
+      this._applyDescVisible(on);
+      try {
+        localStorage.setItem('descVisible', on ? '1' : '0');
+      } catch (_) {
+        /* almacenamiento no disponible */
+      }
+    });
+
     const fullscreenBtn = document.createElement('button');
     fullscreenBtn.id = 'fullscreen-btn';
     fullscreenBtn.type = 'button';
@@ -167,6 +190,7 @@ export class Controls {
     wrapper.appendChild(sizeSelect);
     wrapper.appendChild(mirrorLabel);
     wrapper.appendChild(bgFullLabel);
+    wrapper.appendChild(descLabel);
     wrapper.appendChild(fullscreenBtn);
 
     this.select = select;
@@ -174,9 +198,22 @@ export class Controls {
     this.sizeSelect = sizeSelect;
     this.mirrorInput = mirrorInput;
     this.bgFullInput = bgFullInput;
+    this.descInput = descInput;
     this.fullscreenBtn = fullscreenBtn;
 
     return wrapper;
+  }
+
+  _readDescPref() {
+    try {
+      return localStorage.getItem('descVisible') === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _applyDescVisible(on) {
+    if (this.descriptionElement) this.descriptionElement.style.display = on ? '' : 'none';
   }
 
   _readBgFullPref() {
