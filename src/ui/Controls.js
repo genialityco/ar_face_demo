@@ -130,6 +130,29 @@ export class Controls {
       }
     });
 
+    // Modo "fondo completo": la cámara llena la ventana del navegador sin fullscreen
+    const bgFullLabel = document.createElement('label');
+    bgFullLabel.id = 'bgfull-label';
+    bgFullLabel.title = 'La cámara llena toda la ventana del navegador (sin pantalla completa)';
+    const bgFullInput = document.createElement('input');
+    bgFullInput.type = 'checkbox';
+    bgFullInput.id = 'bgfull-toggle';
+    bgFullLabel.appendChild(bgFullInput);
+    bgFullLabel.appendChild(document.createTextNode('Fondo'));
+
+    const savedBgFull = this._readBgFullPref();
+    bgFullInput.checked = savedBgFull;
+    this._applyBgFull(savedBgFull);
+    bgFullInput.addEventListener('change', (e) => {
+      const on = e.target.checked;
+      this._applyBgFull(on);
+      try {
+        localStorage.setItem('bgFull', on ? '1' : '0');
+      } catch (_) {
+        /* almacenamiento no disponible */
+      }
+    });
+
     const fullscreenBtn = document.createElement('button');
     fullscreenBtn.id = 'fullscreen-btn';
     fullscreenBtn.type = 'button';
@@ -143,15 +166,30 @@ export class Controls {
     wrapper.appendChild(sizeLabel);
     wrapper.appendChild(sizeSelect);
     wrapper.appendChild(mirrorLabel);
+    wrapper.appendChild(bgFullLabel);
     wrapper.appendChild(fullscreenBtn);
 
     this.select = select;
     this.status = status;
     this.sizeSelect = sizeSelect;
     this.mirrorInput = mirrorInput;
+    this.bgFullInput = bgFullInput;
     this.fullscreenBtn = fullscreenBtn;
 
     return wrapper;
+  }
+
+  _readBgFullPref() {
+    try {
+      return localStorage.getItem('bgFull') === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _applyBgFull(on) {
+    const container = document.getElementById('container');
+    if (container) container.classList.toggle('page-full', on);
   }
 
   _readMirrorPref() {
